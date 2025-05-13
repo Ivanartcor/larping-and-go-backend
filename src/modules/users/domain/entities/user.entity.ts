@@ -17,6 +17,7 @@ import { IsEmail, Length, IsOptional, IsBoolean } from 'class-validator';
 import { Character } from 'src/modules/characters/domain/entities/character.entity';
 import { Guild } from 'src/modules/guilds/domain/entities/guild.entity';
 import { GuildMembership } from 'src/modules/guilds/domain/entities/guild-membership.entity';
+import { GlobalEventAttendance } from 'src/modules/events/domain/entities/global-event-attendance.entity';
 
 
 /**
@@ -101,6 +102,10 @@ export class User {
   /** Hermandades de las que este usuario es líder */
   @OneToMany(() => Guild, (g) => g.leader)
   guildsLed?: Guild[];
+
+  @OneToMany(() => GlobalEventAttendance, (a) => a.user)
+  eventAttendances?: GlobalEventAttendance[];
+
 
 
   /* ------------------------------------------------------------------ */

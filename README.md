@@ -691,9 +691,9 @@ Esta sección describe las tablas y relaciones que soportan el chat 1‑a‑1 y 
 | ------------------------ | ------------------------------------------------------------------------------------------ |
 | **chat\_channels**       | Define cada canal. Dos tipos: `direct` (entre dos usuarios) y `guild` (chat de hermandad). |
 | **chat\_participants**   | Usuarios enrolados en un canal; guarda la máscara de personaje usada al entrar.            |
-| **chat\_messages**       | Mensajes enviados (texto, adjuntos, metadata). *(Diseño pendiente)*                        |
-| **chat\_message\_reads** | Marca de lectura por usuario con timestamp. *(Diseño pendiente)*                           |
-| **chat\_attachments**    | Archivos vinculados a un mensaje (imágenes, documentos). *(Opcional)*                      |
+| **chat\_messages**       | Mensajes enviados (texto, adjuntos, metadata).                                             |
+| **chat\_message\_reads** | Marca de lectura por usuario con timestamp.                                                |
+| **chat\_attachments**    | Archivos vinculados a un mensaje (imágenes, documentos).                                   |
 | **chat\_reactions**      | Reacciones emoji a un mensaje. *(Futuro)*                                                  |
 
 Relaciones clave:
@@ -701,6 +701,7 @@ Relaciones clave:
 ```
 chat_channels 1─N chat_participants N─1 users
 chat_channels 1─N chat_messages     N─1 users
+chat_messages 1─N chat_attachments
 chat_messages 1─N chat_message_reads N─1 users
 ```
 
@@ -764,6 +765,249 @@ Notas de lógica:
 - Moderadores podrán borrar mensajes o silenciar usuarios (futuro).
 
 ---
+
+
+
+## 4. Tabla `chat_messages`
+Almacena los mensajes enviados en cada canal con soporte para markdown, adjuntos y operaciones de edición/borrado.
+
+| Columna | Tipo | Detalles |
+|---------|------|----------|
+| id | uuid PK `gen_random_uuid()` | Identificador único de mensaje |
+| channel_id | uuid FK → chat_channels.id | Canal al que pertenece |
+| sender_user_id | uuid FK → users.id | Puede ser NULL si `type='system'` |
+| sender_character_id | uuid FK → characters.id NULL | Máscara pública al momento de envío |
+| type | `message_type` ENUM | `text` / `system` / `media` |
+| content | text | Texto o payload serializado |
+| reply_to_id | uuid FK → chat_messages.id NULL | Para citas / hilos simples |
+| sent_at | timestamptz `DEFAULT now()` | Marca de tiempo principal |
+| edited_at | timestamptz NULL | Última edición (si procede) |
+| is_deleted | boolean `DEFAULT false` | Soft‑delete: conserva el orden |
+| created_at | timestamptz | Fecha de inserción |
+| updated_at | timestamptz | Última modificación |
+
+**Restricciones & Índices**
+* `ix_cm_channel_sent` – `(channel_id, sent_at DESC)` para paginado hacia atrás.
+* `gin_cm_content` GIN full‑text sobre `content` (para buscador).
+* `chk_cm_system_content` – un mensaje `system` no puede tener `sender_user_id`.
+
+**Lógica de servicio**
+* Al **enviar**: verificar participación activa → insert mensaje → update `last_message_at` en `chat_channels`.
+* **Editar**: autor o moderator; set `edited_at` y re‑emitir evento WS.
+* **Borrar**: set `is_deleted=true`; UI decide renderizar “mensaje eliminado”.
+* **Búsqueda**: `to_tsvector('simple', content)` + `plainto_tsquery(keyword)`.
+
+---
+
+## 5. Tabla `chat_attachments`
+Guarda metadatos de archivos vinculados a mensajes (`type='media'`). Se puede extender para miniaturas/redimensionados.
+
+| Columna | Tipo | Detalles |
+|---------|------|----------|
+| id | uuid PK | |
+| message_id | uuid FK → chat_messages.id | Borrado en cascada |
+| file_url | text | URL firmada o pública en el Storage |
+| file_name | varchar(140) | Nombre original para descarga |
+| content_type | varchar(100) | MIME (`image/png`, `application/pdf`, …) |
+| size_bytes | bigint | Tamaño en bytes |
+| width_px | int NULL | Sólo imágenes/vídeos |
+| height_px | int NULL | Sólo imágenes/vídeos |
+| created_at | timestamptz | |
+
+**Índices**
+* `ix_ca_message` – por mensaje.
+* `ix_ca_mime` – filtrar por tipo MIME.
+
+**Lógica de servicio**
+* Antes de insertar se sube el archivo al Storage (S3/Firebase) y se obtiene la URL.
+* Política de tamaño y tipos válidos se valida fuera de la BD.
+* Cron “orphan cleaner” elimina ficheros cuyo mensaje fue borrado.
+
+---
+
+## 6. Tabla `chat_message_reads`
+Registra cuándo cada usuario ha leído un mensaje concreto. Clave compuesta `(message_id,user_id)` evita duplicados.
+
+| Columna | Tipo | Detalles |
+|---------|------|----------|
+| message_id | uuid FK → chat_messages.id | Parte de la PK |
+| user_id | uuid FK → users.id | Parte de la PK |
+| read_at | timestamptz `DEFAULT now()` | Marca de lectura |
+
+**Índices**
+* `ix_cmr_user` – `(user_id, read_at DESC)` para mostrar últimos leídos.
+* `ix_cmr_message` – agrupar lecturas por mensaje (contadores).
+
+**Lógica de servicio**
+* **Marcar leído**: `INSERT … ON CONFLICT DO NOTHING`.
+* **Contador no leídos**: comparar `sent_at` vs. última lectura o usar sumatoria `chat_messages` – `chat_message_reads`.
+* **Evento WS**: `read:ack` con payload `{channelId, messageId, userId}` para actualizar ticks azules en tiempo real.
+
+---
+
+### Diagrama de relaciones actualizado
+
+
+> Con estas tablas la mensajería cubre creación de canales, membresía, mensajes con adjuntos, lectura y ordenación. Búsqueda full‑text y soft‑delete aseguran rendimiento y preservan historial.
+
+
+
+# Diseño de Base de Datos — Eventos Globales y Noticias
+
+
+## Tabla de contenidos
+1. Visión general de tablas y relaciones
+2. Tabla `event_categories`
+3. Tabla `global_events`
+4. Tabla `global_event_attendance`
+5. Tabla `event_media`
+6. Triggers y tareas programadas sugeridas
+
+---
+
+## 1. Visión general de tablas y relaciones
+
+| Tabla | Propósito breve | Relación clave |
+|-------|-----------------|----------------|
+| **event_categories** | Catálogo editable de tipos (torneo, feria, noticia…). | FK desde `global_events.category_id` |
+| **global_events** | Ficha pública del evento global. | 1‑N con `global_event_attendance` y `event_media` |
+| **global_event_attendance** | Confirma o cancela la asistencia de un usuario (con máscara de personaje). | PK compuesta `(event_id,user_id)` |
+| **event_media** | Galería de imágenes/vídeos/documentos vinculada al evento. | FK → `global_events.id` |
+
+```
+users ──< global_event_attendance >── global_events >── event_categories
+characters ─┘                         │
+                                       └──< event_media
+```
+
+---
+
+## 2. Tabla `event_categories`
+
+| Columna | Tipo | Detalles |
+|---------|------|----------|
+| id | uuid PK `gen_random_uuid()` | Identificador único |
+| name | varchar(40) **UNIQUE NOT NULL** | “Torneo”, “Convivencia”… |
+| slug | varchar(60) **UNIQUE** | Alias URL‑safe (`feria-medieval`) |
+| color | varchar(7) | HEX (`#ff5722`) para badges |
+| description | text NULL | Explicación breve |
+| position | int **UNIQUE** | Orden en UI (0=primero) |
+| created_at | timestamptz | Auto `now()` |
+| updated_at | timestamptz | Auto `now()` |
+
+**Índices y checks**
+* `ux_ec_name`, `ux_ec_slug`, `ux_ec_pos` garantizan unicidad.
+* Slug autogenerado con `slugify(name)`.
+
+**Lógica**
+* Solo administradores pueden crear/editar.
+* Al crear sin `position`, se asigna `MAX(position)+1`.
+* Al reordenar, el servicio actualiza los `position` adyacentes para mantener secuencia.
+
+---
+
+## 3. Tabla `global_events`
+
+| Columna | Tipo | Detalles |
+|---------|------|----------|
+| id | uuid PK | |
+| creator_user_id | uuid FK → users.id | `SET NULL` si la cuenta se borra |
+| category_id | uuid FK → event_categories.id | Categoría del evento |
+| title | varchar(120) | Nombre público |
+| slug | varchar(140) **UNIQUE** | Alias (`torneo-primavera-2026`) |
+| description | text | Markdown permitido |
+| banner_url | text NULL | Imagen de cabecera |
+| location_text | varchar(120) | Ciudad / recinto |
+| latitude / longitude | numeric(9,6) NULL | Ambos NULL o ambos NOT NULL |
+| start_at / end_at | timestamptz | `end_at` NULL o > `start_at` |
+| capacity | int NULL | Aforo (`CHECK >0`) |
+| attendee_count | int DEFAULT 0 | Denormalizado (trigger) |
+| status | `event_status` ENUM | `scheduled/cancelled/completed` |
+| featured | boolean DEFAULT false | Mostrar en home |
+| created_at / updated_at | timestamptz | Auto |
+
+**Índices**
+* `ix_ge_cat_start` → listados por categoría y fecha.
+* `ix_ge_status_date` → próximos/cancelados.
+* `gin_ge_search` → búsqueda full‑text en `title + description`.
+* `ix_ge_coords` → filtros geográficos (o GiST si PostGIS).
+
+**Checks**
+* Fechas (`end_at > start_at`).
+* Coherencia coordenadas.
+* Capacidad positiva.
+
+**Lógica**
+* Guard NestJS verifica permiso `isEventOrganizer` en `creator_user_id`.
+* Trigger `AFTER INSERT/UPDATE` en `global_event_attendance` mantiene `attendee_count`.
+* Cron diario actualiza `status='completed'` cuando `end_at` expiró.
+
+---
+
+## 4. Tabla `global_event_attendance`
+
+| Columna | Tipo | Detalles |
+|---------|------|----------|
+| event_id | uuid PK‑part | FK → global_events.id |
+| user_id | uuid PK‑part | FK → users.id |
+| character_id | uuid NULL | FK → characters.id |
+| status | `attendance_status` ENUM | `confirmed/cancelled/waitlisted` |
+| changed_at | timestamptz | Auto `now()` |
+| created_at | timestamptz | Auto |
+
+**Restricciones**
+* PK compuesta evita duplicados.
+* `status` + `capacity` gestionan lista de espera.
+
+**Índices**
+* `ix_gea_event_status` → asistentes confirmados por evento.
+* `ix_gea_user` → historial de un usuario.
+
+**Lógica**
+* Confirmar: si aforo lleno → `waitlisted`.
+* Cancelar: reduce `attendee_count` y promueve un `waitlisted`.
+* Trigger actualiza aforo después de cualquier INSERT/UPDATE/DELETE.
+
+---
+
+## 5. Tabla `event_media`
+
+| Columna | Tipo | Detalles |
+|---------|------|----------|
+| id | uuid PK | |
+| event_id | uuid FK → global_events.id | Galería del evento |
+| uploader_user_id | uuid FK → users.id | NULL si usuario borrado |
+| file_url | text | URL en Storage/CDN |
+| thumbnail_url | text NULL | Miniatura (si imagen/vídeo) |
+| file_name | varchar(140) | Nombre original |
+| content_type | varchar(100) | MIME (`image/jpeg`, etc.) |
+| size_bytes | bigint | Tamaño |
+| width_px / height_px | int NULL | Solo multimedia visual |
+| caption | varchar(200) NULL | Texto bajo la imagen |
+| position | int DEFAULT 0 | Orden |
+| created_at | timestamptz | |
+
+**Índices**
+* `ix_em_event_pos` → orden por posición.
+* `ix_em_mime` → filtros por tipo.
+
+**Lógica**
+* Al subir: validar tamaño/MIME → generar `thumbnail_url` → `position = MAX+1`.
+* Reordenar: servicio ajusta `position` para secuencia continua.
+* Al eliminar: borrar archivo en Storage + fila; renumerar.
+
+---
+
+## 6. Triggers y cron sugeridos
+
+| Nombre | Tipo | Descripción |
+|--------|------|-------------|
+| **tg_gea_count** | PL/pgSQL | `AFTER INSERT/UPDATE/DELETE` en `global_event_attendance` → recalcula `attendee_count` donde `status='confirmed'`. |
+| **tg_ev_media_pos** | PL/pgSQL | `AFTER DELETE` en `event_media` → renumera `position` restantes. |
+| **cron_complete_events** | Job diario | Marca `GLOBAL_EVENTS.status='completed'` cuando `end_at < now()`. |
+| **cron_expire_waitlist** | Job diario | Envía correo a `waitlisted` si se libera aforo. |
+
+Con estas tablas, restricciones e índices, el subsistema de eventos globales queda preparado para búsquedas rápidas, control de asistencia y gestión multimedia rica.
 
 
 
