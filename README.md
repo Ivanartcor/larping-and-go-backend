@@ -1012,3 +1012,180 @@ Con estas tablas, restricciones e índices, el subsistema de eventos globales qu
 
 
 
+
+
+# Guía Definitiva de Configuración de Base de Datos
+
+*PostgreSQL · NestJS 10 · TypeORM 0.3*
+
+Este documento explica, paso a paso, cómo conectar la aplicación **Larping & Go** a PostgreSQL, generar y ejecutar migraciones, sembrar datos iniciales y verificar que las **40 + entidades y vistas** diseñadas se crean correctamente.
+
+---
+
+## 1 · Estructura de carpetas
+
+```text
+src/
+├─ app.module.ts                 # módulo raíz—ahora minimal
+├─ config/
+│  ├─ configuration.ts           # carga y tipa variables .env
+│  └─ validation.schema.ts       # validación Joi
+├─ database/
+│  ├─ data-source.ts             # instancia única de DataSource
+│  ├─ database.module.ts         # @Global() + TypeOrmModule.forRoot
+│  ├─ migrations/                # *.ts generadas por CLI
+│  └─ seeds/seed.ts              # datos iniciales (categorías, roles)
+└─ modules/                      # bounded‑contexts (auth, guilds, chat…)
+```
+
+---
+
+## 2 · Variables de entorno (`.env`)
+
+```ini
+DB_HOST=
+DB_PORT=
+DB_USERNAME=
+DB_PASSWORD=
+DB_NAME=
+APP_PORT=
+JWT_SECRET=
+JWT_EXPIRES_IN=
+```
+
+`validation.schema.ts` aborta el arranque si faltan claves o el formato es incorrecto.
+
+---
+
+## 3 · `config/configuration.ts`
+
+```ts
+export default registerAs('config', () => ({
+  db: {
+    host: process.env.DB_HOST,
+    port: +process.env.DB_PORT,
+    user: process.env.DB_USERNAME,
+    pass: process.env.DB_PASSWORD,
+    name: process.env.DB_NAME,
+    ssl: process.env.NODE_ENV === 'production',
+  },
+  app:  { port: +process.env.APP_PORT || 3000 },
+  jwt:  { secret: process.env.JWT_SECRET, expiresIn: process.env.JWT_EXPIRES_IN },
+}));
+```
+
+---
+
+## 4 · `database/data-source.ts`
+
+```ts
+import 'dotenv/config';
+import { DataSource } from 'typeorm';
+import * as path from 'path';
+import config from '../config/configuration';
+
+const cfg = config();
+const entities = path.join(__dirname, '../modules/**/domain/**/*{.entity,.view}.{ts,js}');
+const migrations = path.join(__dirname, './migrations/*.{ts,js}');
+
+export const AppDataSource = new DataSource({
+  type: 'postgres',
+  host: cfg.db.host,
+  port: cfg.db.port,
+  username: cfg.db.user,
+  password: cfg.db.pass,
+  database: cfg.db.name,
+  ssl: cfg.db.ssl,
+  logging: false,
+  synchronize: false,           // ¡Nunca en prod!
+  entities: [entities],
+  migrations: [migrations],
+});
+```
+
+**Regla de oro:** este archivo debe exportar **solo una** instancia `DataSource`.
+
+---
+
+## 5 · `database/database.module.ts`
+
+```ts
+@Global()
+@Module({
+  imports: [TypeOrmModule.forRoot(AppDataSource.options)],
+  exports: [TypeOrmModule],
+})
+export class DatabaseModule {}
+```
+
+`app.module.ts` simplemente importa `DatabaseModule` y deja de llamar a `TypeOrmModule.forRoot`.
+
+---
+
+## 6 · Scripts de NPM
+
+```json
+"scripts": {
+  "typeorm":            "ts-node -r tsconfig-paths/register node_modules/typeorm/cli",
+  "migration:generate": "npm run typeorm -- migration:generate -d src/database/data-source.ts src/database/migrations/InitSchema",
+  "migration:run":      "npm run typeorm -- migration:run      -d src/database/data-source.ts",
+  "seed":               "ts-node src/database/seeds/seed.ts"
+}
+```
+
+---
+
+## 7 · Vista materializada `search_index`
+
+Para evitar errores de alias en el CLI se **excluye del glob** y se crea en una migración manual:
+
+```ts
+await queryRunner.query(`
+  CREATE MATERIALIZED VIEW search_index AS /* SELECT UNION ALL … */;
+  CREATE INDEX gin_si_tsv ON search_index USING gin(tsv);
+`);
+```
+
+Refrescada luego con `REFRESH MATERIALIZED VIEW CONCURRENTLY search_index;`.
+
+---
+
+## 8 · Migraciones y semillas
+
+1. `npm run migration:generate` → genera todo el DDL (extensiones, enums, tablas, índices).
+2. `npm run migration:run` → aplica en la base de datos.
+3. `npm run seed` → inserta categorías de eventos y rol “Líder”.
+
+---
+
+## 9 · Verificación rápida
+
+```bash
+psql -d larping_and_go -c "\dt"                 # lista tablas
+psql -d larping_and_go -c "SELECT * FROM event_categories;"
+```
+
+---
+
+## 10 · Solución de problemas frecuentes
+
+| Error                                                   | Motivo                                          | Solución                                    |
+| ------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------- |
+| **Given data source file must contain only one export** | `data-source.ts` exporta más de una cosa        | Deja solo `export const AppDataSource …`.   |
+| **Cannot build query because main alias is not set**    | Vista con expresión vacía o sin `FROM`          | Excluir del glob y construir vía SQL.       |
+| **un identificador entre comillas está inconcluso**     | `@Index` con comilla sobrante (`… 'confirmed"`) | Corrige la entidad y regenera la migración. |
+
+---
+
+## 11 · Arranque de la API
+
+```bash
+npm run start:dev   # Nest levanta y conecta usando AppDataSource
+```
+
+Los futuros cambios de esquema siguen el ciclo: **editar entidad → migration**\*\*:generate\*\*\*\* → PR → migration\*\*\*\*:run\*\*\*\* en staging/prod\*\*.
+
+---
+
+**Fin de la guía.**
+

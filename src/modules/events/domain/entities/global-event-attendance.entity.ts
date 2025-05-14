@@ -16,7 +16,7 @@ import {
   }
   
   @Entity('global_event_attendance')
-  @Index('ix_gea_event_status', ['event'], { where: `"status" = 'confirmed'"` })
+ @Index('ix_gea_event_status', ['event'], { where: `"status" = 'confirmed'` })
   @Index('ix_gea_user', ['user', 'changedAt'])
   export class GlobalEventAttendance {
     /* --- Clave primaria compuesta --- */
