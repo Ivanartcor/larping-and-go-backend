@@ -4,16 +4,26 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';    // 👈 nuevo
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './modules/auth/auth.module';
+import { validationSchema } from './config/validation.schema';
+import configuration from './config/configuration';
 
 @Module({
   imports: [
     // 1. Variables de entorno (sigue igual)
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validationSchema,
+      load: [configuration],
+    }),
+
 
     // 2. Conexión a PostgreSQL gestionada por DatabaseModule
-    DatabaseModule, // 👈 reemplaza TypeOrmModule.forRoot
+    DatabaseModule, // 👈 reemplaza a TypeOrmModule.forRoot
+    AuthModule,
+
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

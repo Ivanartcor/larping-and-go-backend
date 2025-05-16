@@ -1189,3 +1189,323 @@ Los futuros cambios de esquema siguen el ciclo: **editar entidad → migration**
 
 **Fin de la guía.**
 
+
+
+
+# Autenticación – **Larping & Go Backend**
+
+Este lienzo reúne **toda la información técnica** del módulo **Auth** tal y como se ha implementado, para que se comprenda, amplíe y pruebe el flujo completo de autenticación.
+
+---
+
+## 1 · Propósito del módulo
+
+| Caso de uso            | Descripción                                                               |
+| ---------------------- | ------------------------------------------------------------------------- |
+| Registro               | Alta de usuario con correo, nombre de usuario y contraseña segura.        |
+| Inicio de sesión       | Valida credenciales y emite *access* y *refresh* tokens.                  |
+| Renovación de sesión   | Genera un nuevo *access token* usando un *refresh token* válido (7 días). |
+| Restablecer contraseña | Flujo en dos pasos: solicitud (correo + enlace) y confirmación.           |
+| Quién soy / Me         | Endpoint protegido que devuelve el `user.id` autenticado.                 |
+
+---
+
+## 2 · Estructura de carpetas
+
+```text
+modules/auth/
+├─ application/
+│  ├─ auth.service.ts        ← orquestador
+│  ├─ commands/
+│  ├─ ports/
+│  └─ use-cases/
+├─ domain/
+│  ├─ dto/
+│  ├─ entities/
+│  └─ value-objects/
+└─ infrastructure/
+   ├─ adapters/
+   ├─ controllers/
+   ├─ guards/
+   ├─ repositories/
+   └─ strategies/
+auth.module.ts
+```
+
+---
+
+## 3 · Entidades clave
+
+### `User` *(del módulo **************users**************)*
+
+Campos principales: `id`, `email`, `passwordHash`, `username`, *flags* de estado y relaciones.
+
+### `PasswordResetToken`
+
+| Campo             | Tipo            | Comentario                               |
+| ----------------- | --------------- | ---------------------------------------- |
+| `tokenHash`       | SHA‑256         | Nunca se guarda el token plano.          |
+| `expiresAt`       | Date            | Debe ser futura (`@BeforeInsert`).       |
+| `used` / `usedAt` | boolean / Date? | Evita reutilización del enlace de reset. |
+
+---
+
+## 4 · DTO
+
+| Archivo                         | Campos                                          |
+| ------------------------------- | ----------------------------------------------- |
+| `register.dto.ts`               | `email`, `password`, `username`, `displayName?` |
+| `login.dto.ts`                  | `email`, `password`                             |
+| `refresh-token.dto.ts`          | `refreshToken`                                  |
+| `request-password-reset.dto.ts` | `email`                                         |
+| `confirm-password-reset.dto.ts` | `token`, `newPassword`                          |
+
+---
+
+## 5 · Ports (interfaces)
+
+| Port interface                 | Métodos principales                               |
+| ------------------------------ | ------------------------------------------------- |
+| **`IUserAuthRepository`**      | `existsByEmail`, `findByEmail`, `save`            |
+| **`IPasswordTokenRepository`** | `create`, `findValid`, `markUsed`, `purgeExpired` |
+| **`IHasherPort`**              | `hash`, `compare` (BCrypt)                        |
+| **`IJwtPort`**                 | `sign`, `verify`                                  |
+| **`IMailerPort`**              | `sendPasswordReset(to, link)`                     |
+
+---
+
+## 6 · Use‑cases
+
+| Use‑case                 | Flujo resumido                                                     |
+| ------------------------ | ------------------------------------------------------------------ |
+| **RegisterUser**         | 1 Comprueba email → 2 Hashea contraseña → 3 Guarda usuario.        |
+| **LoginUser**            | 1 Busca usuario → 2 Compara hash → 3 Emite tokens.                 |
+| **RequestPasswordReset** | 1 Genera token SHA‑256 (+2 h) → 2 Envía correo con enlace.         |
+| **ConfirmPasswordReset** | 1 Valida token → 2 Marca `used` → 3 Actualiza contraseña (BCrypt). |
+
+---
+
+## 7 · Adapters concretos
+
+| Adaptador                 | Implementa                 | Detalle técnico                                       |
+| ------------------------- | -------------------------- | ----------------------------------------------------- |
+| `UserAuthRepository`      | `IUserAuthRepository`      | TypeORM sobre entidad `User`.                         |
+| `PasswordTokenRepository` | `IPasswordTokenRepository` | TypeORM + filtros `MoreThan / LessThan`.              |
+| `BcryptAdapter`           | `IHasherPort`              | Rondas = 12.                                          |
+| `JwtAdapter`              | `IJwtPort`                 | Envoltorio de `@nestjs/jwt`.                          |
+| `MailerAdapter`           | `IMailerPort`              | Transporte SMTP vía `nodemailer` (`SMTP_*` env vars). |
+
+---
+
+## 8 · Capa de seguridad
+
+| Archivo                   | Responsabilidad                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| `jwt-access.strategy.ts`  | Verifica *access token* (`Authorization: Bearer …`), firma con `config.jwt.secret`. |
+| `jwt-refresh.strategy.ts` | Verifica *refresh token* (`body.refreshToken`), firma con `${secret}_refresh`.      |
+| `JwtAuthGuard`            | Protege endpoints estándar (rol *access*).                                          |
+| `JwtRefreshGuard`         | Protege `/auth/refresh` (rol *refresh*).                                            |
+
+---
+
+## 9 · `AuthService` (façade)
+
+| Método público              | Caso de uso interno           | Devuelve                        |
+| --------------------------- | ----------------------------- | ------------------------------- |
+| `register(dto)`             | `RegisterUserUseCase`         | `{ accessToken, refreshToken }` |
+| `login(dto)`                | `LoginUserUseCase`            | `{ accessToken, refreshToken }` |
+| `refresh(dto, userId)`      | — (solo helper)               | nuevos tokens                   |
+| `requestPasswordReset(dto)` | `RequestPasswordResetUseCase` | `void`                          |
+| `confirmPasswordReset(dto)` | `ConfirmPasswordResetUseCase` | `void`                          |
+
+Helper privado **`issueTokens()`** genera tokens mediante `IJwtPort`.
+
+---
+
+## 10 · Controladores REST
+
+| Ruta                          | Guard             | Input DTO                 | Acción                             |
+| ----------------------------- | ----------------- | ------------------------- | ---------------------------------- |
+| `POST /auth/register`         | —                 | `RegisterDto`             | `authService.register`             |
+| `POST /auth/login`            | —                 | `LoginDto`                | `authService.login`                |
+| `POST /auth/refresh`          | `JwtRefreshGuard` | `RefreshTokenDto`         | `authService.refresh`              |
+| `GET  /auth/me`               | `JwtAuthGuard`    | —                         | responde `{ id }`                  |
+| `POST /auth/password/request` | —                 | `RequestPasswordResetDto` | `authService.requestPasswordReset` |
+| `POST /auth/password/confirm` | —                 | `ConfirmPasswordResetDto` | `authService.confirmPasswordReset` |
+
+Todos decorados con **`@ApiTags('auth')`** para Swagger.
+
+---
+
+## 11 · `auth.module.ts`
+
+* **imports**: `TypeOrmModule.forFeature([User, PasswordResetToken])`, `JwtModule.registerAsync`, `PassportModule`, `ConfigModule`.
+* **controllers**: `AuthController`, `PasswordResetController`.
+* **providers**: adapters, strategies, guards, use‑cases, `AuthService`.
+* **exports**: `AuthService`, `JwtAuthGuard`.
+
+
+
+## 13 · Validación Joi
+
+```ts
+JWT_SECRET: Joi.string().min(12).required(),
+JWT_EXPIRES_IN: Joi.string().default('3600s'),
+SMTP_HOST: Joi.string().required(),
+SMTP_PORT: Joi.number().default(587),
+SMTP_USER: Joi.string().required(),
+SMTP_PASS: Joi.string().required(),
+```
+
+---
+
+## 14 · Flujo de restablecimiento de contraseña
+
+1. **Solicitud**   `POST /auth/password/request`
+
+   * Genera `rawToken` UUID.
+   * Guarda `sha256(rawToken)` en `password_reset_tokens` con `expiresAt=+2 h`.
+   * Envía correo a `FRONT_URL/reset?token=${rawToken}`.
+
+2. **Confirmación**   `POST /auth/password/confirm`
+
+   * Recibe `token` plano + `newPassword`.
+   * Calcula `sha256(token)` y busca fila no usada y no expirada.
+   * Marca el token como usado y actualiza `passwordHash` (BCrypt) del usuario.
+
+---
+
+## 14 bis · Flujos paso a paso (detalle completo)
+
+### 14 bis‑1 · Registro
+
+| Paso | Capa               | Acción                                                                                       | Detalles                             |
+| ---- | ------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------ |
+|  1   | **Controller**     | `POST /auth/register` recibe `RegisterDto`.                                                  | Nest ValidationPipe asegura formato. |
+|  2   | **AuthService**    | Convierte DTO → `RegisterCommand`.                                                           |                                      |
+|  3   | **RegisterUserUC** | a) `existsByEmail` (repo).b) `hash(password)` (BCrypt).c) crea entidad `User` y la `save()`. | 📄 INSERT en tabla `users`.          |
+|  4   | **AuthService**    | Llama a `issueTokens(id)`.                                                                   | Usando `IJwtPort.sign`.              |
+|  5   | **Controller**     | Devuelve `{accessToken, refreshToken}` (201).                                                |                                      |
+
+### 14 bis‑2 · Login
+
+| Paso                                                        | Descripción |
+| ----------------------------------------------------------- | ----------- |
+|  1 `POST /auth/login` → DTO                                 |             |
+|  2 `LoginUserUC` busca usuario por email → `compare` BCrypt |             |
+|  3 Genera tokens (mismo helper)                             |             |
+|  4 Respuesta 200 con tokens                                 |             |
+
+### 14 bis‑3 · Refresh
+
+| Paso                                                          | Notas |
+| ------------------------------------------------------------- | ----- |
+|  1 `POST /auth/refresh` incluye `refreshToken` en body.       |       |
+|  2 `JwtRefreshGuard` verifica firma, exp y secret `_refresh`. |       |
+|  3 Si OK, añade `req.user.id`.                                |       |
+|  4 `AuthService.refresh(_, id)` emite nuevos tokens.          |       |
+
+### 14 bis‑4 · WhoAmI (`GET /auth/me`)
+
+1. `JwtAuthGuard` valida *access token*.2. Devuelve `{ id }`.
+
+### 14 bis‑5 · Solicitud de reset
+
+| Nº | Acción                                                 | Resultado              |
+| -- | ------------------------------------------------------ | ---------------------- |
+| 1  | `POST /auth/password/request` con email                | Pipe valida email      |
+| 2  | `RequestPasswordResetUC` genera `rawToken` UUID        |                        |
+| 3  | Calcula `sha256` y guarda fila `password_reset_tokens` | `expiresAt = now()+2h` |
+| 4  | `MailerAdapter.sendPasswordReset()` envía enlace       | Contiene `rawToken`    |
+| 5  | Responde 202 Accepted                                  |                        |
+
+### 14 bis‑6 · Confirmación de reset
+
+| Paso                                                             | Acción |
+| ---------------------------------------------------------------- | ------ |
+| 1 `POST /auth/password/confirm` con `token`, `newPassword`       |        |
+| 2 `ConfirmPasswordResetUC` → `sha256(token)` y busca fila válida |        |
+| 3 Marca `used`, actualiza `user.passwordHash` (BCrypt)           |        |
+| 4 Devuelve 204 No Content                                        |        |
+
+---
+
+## 15 · Migraciones y seeds · Migraciones y seeds
+
+* La tabla `password_reset_tokens` y sus índices se crean en **InitSchema**.
+* **Seed inicial**: categorías de evento + usuario *admin* (`email: admin@...`).
+
+```bash
+npm run migration:run
+npm run seed
+```
+
+---
+
+## 16 · Pruebas de humo
+
+```bash
+# Registro
+curl -X POST http://localhost:3000/auth/register \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"a@b.c","password":"qwerty12","username":"alfa"}'
+
+# Login
+curl -X POST http://localhost:3000/auth/login \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"a@b.c","password":"qwerty12"}'
+
+# Refresh
+printf '%s' '{"refreshToken":"<RT>"}' | \
+  curl -X POST http://localhost:3000/auth/refresh -H 'Content-Type: application/json' -d @-
+
+# Solicitar reset
+curl -X POST http://localhost:3000/auth/password/request -d '{"email":"a@b.c"}'
+```
+
+---
+
+### Cosas futuras:
+
+“Cerrar sesión” cuando se usan JWT
+
+Los access tokens son stateless, así que “hacer logout” consiste en garantizar que el front deja de usarlos o que el backend los rechaza. Hay tres patrones válidos; puedes elegir uno o combinarlos.
+
+Opción	¿Cómo funciona?	Cambios en el proyecto	Pros / Contras
+
+1\. Sólo front (token-discard)	El cliente borra accessToken y refreshToken de memoria / localStorage y cierra el WebSocket.	• Añadir endpoint /auth/logout que devuelva 204.
+
+• En el front, dispatch(logout) limpia storage y cookies.	✔ Sin carga en BD ni Redis.
+
+✖ Si el token fue robado, sigue válido hasta expirar.
+
+2\. Revocar refresh tokens (lista blanca)	Guardas un registro de sesión (session\_id, tokenHash, user\_id, expires\_at). “Logout” ⇒ marcas la sesión como revoked.	• Crear tabla user\_sessions.
+
+• Modificar LoginUC para guardar hash SHA-256 del refresh.
+
+• Estrategia JwtRefreshStrategy compara el hash con la fila no revocada.
+
+• Endpoint POST /auth/logout → marca la sesión como revocada.	✔ Invalida refresh robado.
+
+✔ Auditoría de dispositivos.
+
+✖ Access token sigue vivo hasta 15 min (mitigable bajando su TTL).
+
+3\. Blacklist global en Redis	Cada logout mete el jti del access token en SETEX blacklist 15m. Un guard comprueba jti ∉ blacklist.	• Añadir claim jti (UUID) al firmar tokens.
+
+• Guard JwtAuthGuard consulta Redis.
+
+• logout guarda jti con TTL = tiempo restante.	✔ Invalida inmediato incluso el access token.
+
+✖ Requiere Redis y una llamada extra en cada request.
+
+Recomendación práctica
+
+Combina 1 + 2 (lista blanca de refresh tokens + limpieza front):
+
+
+Fin del lienzo
+
+Este documento refleja con precisión la implementación actual del módulo de autenticación — **carpetas, clases, contratos, flujos y configuración**.
+Cuando se añadan funciones nuevas (por ejemplo, verificación de correo)&#x20;
+secciona y actualiza este lienzo para mantener la fuente de verdad al día.
