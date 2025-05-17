@@ -18,7 +18,7 @@ export class MailerAdapter implements IMailerPort {
   async sendPasswordReset(to: string, link: string): Promise<void> {
     await this.transporter.sendMail({
       to,
-      subject: 'Restablece tu contraseña',
+      subject: 'Restablece tu contraseña de Larping & Go',
       html: `<p>Haz clic en <a href="${link}">este enlace</a> para restablecer tu contraseña (válido 2 h).</p>`,
     });
     this.log.debug(`Password-reset mail sent to ${to}`);

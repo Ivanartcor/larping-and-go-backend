@@ -1,3 +1,4 @@
+//src\modules\auth\application\ports\i-user-auth.repository.ts
 import { User } from "src/modules/users/domain/entities/user.entity"; 
 /**
  * Acceso a usuarios para los flujos de autenticación.

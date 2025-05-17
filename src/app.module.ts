@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { validationSchema } from './config/validation.schema';
 import configuration from './config/configuration';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import configuration from './config/configuration';
     // 2. Conexión a PostgreSQL gestionada por DatabaseModule
     DatabaseModule, // 👈 reemplaza a TypeOrmModule.forRoot
     AuthModule,
+    UsersModule
 
   ],
   controllers: [AppController],

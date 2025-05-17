@@ -1509,3 +1509,167 @@ Fin del lienzo
 Este documento refleja con precisión la implementación actual del módulo de autenticación — **carpetas, clases, contratos, flujos y configuración**.
 Cuando se añadan funciones nuevas (por ejemplo, verificación de correo)&#x20;
 secciona y actualiza este lienzo para mantener la fuente de verdad al día.
+
+
+
+# Lienzo de Diseño – **Módulo Users**
+
+*Este lienzo recoge todo el micro‑dominio «Users» tal y como se ha implementado: árbol de carpetas, contratos, flujos y detalles de negocio. Es la única fuente de verdad para mantenimiento y futuras ampliaciones.*
+
+---
+
+## 1 · Propósito
+
+Representar a la **persona real** (cuenta privada) y exponer un **perfil público** basado en su `activeCharacter`.
+
+---
+
+## 2 · Árbol de carpetas
+
+```
+modules/users/
+├─ application/
+│  ├─ ports/                # IUserRepository, IStoragePort
+│  ├─ use-cases/            # UpdateProfile, ChangeActiveCharacter, GetPublicProfile
+│  └─ users.service.ts      # façade
+├─ domain/
+│  ├─ dto/                  # update-profile.dto.ts, change-active-character.dto.ts, public-user.dto.ts
+│  ├─ value-objects/        # username.vo.ts (futuro)
+│  └─ entities/             # user.entity.ts (definida en módulo users)
+└─ infrastructure/
+    ├─ controllers/         # users.controller.ts
+    ├─ repositories/        # user.repository.ts
+    ├─ adapters/            # local-storage.adapter.ts
+    └─ ... (guards reutilizados)
+users.module.ts
+```
+
+---
+
+## 3 · Entidad `User`
+
+* PK `id` (uuid)
+* Credenciales (`email` único, `passwordHash` BCrypt).
+* Flags `isEmailVerified`, `isAdmin`, `isActive`.
+* Relaciones: `characters[]`, `activeCharacter`, `guildMemberships[]`, `guildsLed[]`, `eventAttendances[]`.
+* Getter `avatarUrl` → `activeCharacter.avatarUrl`.
+
+---
+
+## 4 · DTO
+
+| DTO                          | Campos                                                             | Uso                         |
+| ---------------------------- | ------------------------------------------------------------------ | --------------------------- |
+| **UpdateProfileDto**         | `displayName?`, `locale?`, `avatarUrl?`                            | PATCH del propietario       |
+| **ChangeActiveCharacterDto** | `characterId` (uuid)                                               | Cambiar máscara pública     |
+| **PublicUserDto**            | `id`, `username`, `displayName?`, `avatarUrl?`, `activeCharacter?` | Respuesta para `/users/:id` |
+
+---
+
+## 5 · Ports
+
+| Port                  | Métodos clave                                                                  |
+| --------------------- | ------------------------------------------------------------------------------ |
+| **`IUserRepository`** | `findById`, `findByUsername`, `save`, `getPublicProfile`, `setActiveCharacter` |
+| **`IStoragePort`**    | `uploadAvatar(userId, buffer, mime)` → URL                                     |
+
+---
+
+## 6 · Adapters (infra)
+
+| Adaptador             | Implementa        | Detalles                                            |
+| --------------------- | ----------------- | --------------------------------------------------- |
+| `UserRepository`      | `IUserRepository` | TypeORM, transacción en `setActiveCharacter`        |
+| `LocalStorageAdapter` | `IStoragePort`    | Guarda en `uploads/avatars/`, sirve via `/static/…` |
+
+---
+
+## 7 · Use‑cases (orquestration layer)
+
+| Use‑case                  | Paso a paso                                                                                                                                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **UpdateProfile**         | ① `users.findById` → 404 si no.<br>② Parchea campos dto.<br>③ Si `file` → `storage.uploadAvatar` → copia URL a `activeCharacter.avatarUrl`.<br>④ `users.save` (cascada).<br>⑤ `users.getPublicProfile` out. |
+| **ChangeActiveCharacter** | ① `users.setActiveCharacter(userId,charId)` *(TX)*.<br>② `users.getPublicProfile` out.                                                                                                                      |
+| **GetPublicProfileQuery** | proxy a `userRepo.getPublicProfile`.                                                                                                                                                                        |
+
+---
+
+## 8 · UsersService (façade)
+
+Reúne los casos de uso y consulta para ser consumido por el **UsersController** y otros módulos.
+
+---
+
+## 9 · HTTP API
+
+| Método | Ruta                         | Guard          | Acción                          |
+| ------ | ---------------------------- | -------------- | ------------------------------- |
+| `GET`  | `/users/me`                  | `JwtAuthGuard` | perfil propio (público)         |
+| `PUT`  | `/users/me` *(multipart)*    | `JwtAuthGuard` | `UpdateProfile` (acepta avatar) |
+| `PUT`  | `/users/me/active-character` | `JwtAuthGuard` | `ChangeActiveCharacter`         |
+| `GET`  | `/users/:id`                 | —              | Público, `GetPublicProfile`     |
+
+*Subida avatar*: `multipart/form-data` campo `avatar` (JPEG/PNG ≤ 2 MB).
+
+---
+
+## 10 · Módulo
+
+```ts
+@Module({
+  imports: [TypeOrmModule.forFeature([User, Character]), AuthModule],
+  controllers: [UsersController],
+  providers: [
+    { provide: 'USER_REPO', useClass: UserRepository },
+    { provide: 'STORAGE',   useClass: LocalStorageAdapter },
+    UpdateProfileUseCase, ChangeActiveCharacterUseCase,
+    GetPublicProfileQuery, UsersService,
+  ],
+  exports: [UsersService],
+})
+```
+
+---
+
+## 11 · Flujos detallados
+
+### 11.1 Actualizar perfil *(PUT /users/me)*
+
+1. **Guard JWT** valida y añade `req.user.id`.
+2. `multer` procesa `avatar` → buffer.<br>2bis. Si peso o MIME inválidos → 400.
+3. **Controller** llama `usersService.updateProfile(id,dto,file)`.
+4. **Use‑case** `UpdateProfile` sigue los pasos de la tabla §7.
+5. Se devuelve `PublicUserDto` con nuevo avatar y displayName.
+
+### 11.2 Cambiar personaje activo *(PUT /users/me/active-character)*
+
+1. Guard JWT; Controller pasa id + dto.<br>2. `ChangeActiveCharacterUC` → repositorio TX.<br>3. Devuelve public profile con nuevo `activeCharacter`.
+
+### 11.3 Consultar perfil público *(GET /users/\:id)*
+
+1. No guard: ruta pública.<br>2. Repo devuelve proyección pública, cacheable.
+
+---
+
+## 12 · Errores comunes
+
+| Código | Motivo                                      | Mensaje                                |
+| ------ | ------------------------------------------- | -------------------------------------- |
+| `400`  | Avatar > 2 MB o MIME ≠ PNG/JPEG             | `Invalid file type/size`               |
+| `403`  | Usuario intenta cambiar char que no es suyo | `Forbidden character`                  |
+| `404`  | Usuario o char no existen                   | `User not found / Character not found` |
+
+---
+
+## 13 · Checklist de seguridad
+
+* **Avatar validation** evita SVG / scripts.
+* **Locale** limitado a 10 chars.
+* Transacción en `setActiveCharacter` previene estado incoherente.
+* `passwordHash` nunca serializado.
+
+---
+
+### Mantén este lienzo actualizado
+
+Cada vez que cambies reglas (p.ej. permitir cambio de e‑mail), añade la sección correspondiente para que el equipo tenga siempre la referencia correcta.

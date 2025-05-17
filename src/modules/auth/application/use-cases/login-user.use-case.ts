@@ -35,7 +35,11 @@ export class LoginUserUseCase {
     const isValid = user && await this.hasher.compare(cmd.password, user.passwordHash);
     if (!isValid) throw new UnauthorizedException('Credenciales incorrectas');
 
-    /* 3. Emitir tokens */
+    // 3  Registrar el último login
+    user.lastLoginAt = new Date();
+    await this.users.save(user); // <-- asegura que el repo tenga este método
+
+    /* 4. Emitir tokens */
     const payload       = { sub: user.id };
     const accessExpiry  = this.cfg.get<string>('config.jwt.expiresIn');      // p. ej. '15m'
     const refreshSecret = this.cfg.get<string>('config.jwt.secret') + '_refresh';

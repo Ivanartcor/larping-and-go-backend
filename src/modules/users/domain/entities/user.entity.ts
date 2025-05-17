@@ -12,7 +12,7 @@ import {
   BeforeInsert,
   BeforeUpdate,
 } from 'typeorm';
-import { Exclude } from 'class-transformer';
+import { Exclude, Expose } from 'class-transformer';
 import { IsEmail, Length, IsOptional, IsBoolean } from 'class-validator';
 import { Character } from 'src/modules/characters/domain/entities/character.entity';
 import { Guild } from 'src/modules/guilds/domain/entities/guild.entity';
@@ -56,9 +56,15 @@ export class User {
   @Length(2, 50)
   displayName?: string;
 
-  @Column({ name: 'avatar_url', type: 'text', nullable: true })
-  @IsOptional()
-  avatarUrl?: string;
+  //Ya se utiliza el de character
+  //@Column({ name: 'avatar_url', type: 'text', nullable: true })
+  //@IsOptional()
+  //avatarUrl?: string;
+
+  @Expose()                                     // permite serializar
+  get avatarUrl(): string | undefined {
+    return this.activeCharacter?.avatarUrl;
+  }
 
   @Column({ length: 10, default: 'es' })
   locale!: string;

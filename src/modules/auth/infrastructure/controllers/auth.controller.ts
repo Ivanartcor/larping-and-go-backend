@@ -21,7 +21,6 @@ export class AuthController {
   /* ---------- Login ---------- */
   @Post('login')
   async login(@Body() dto: LoginDto) {
-    console.log('auth header ->');
     return this.auth.login(dto);
   }
 
