@@ -24,8 +24,8 @@ export class CharacterProperty {
     @Column({ length: 50 })
     key!: string;
 
-    @Column({ type: 'jsonb' })
-    value!: unknown; // string | number | boolean | array
+    @Column({ type: 'jsonb', nullable: true })
+    value!: unknown; // string | number | boolean | array | null // validación de tipo se hace en el DTO/Use-case
 
     @Column({ name: 'value_type', length: 10 })
     @IsIn(['text', 'number', 'boolean', 'list'])

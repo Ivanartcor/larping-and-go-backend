@@ -1,0 +1,32 @@
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ICharacterRepository } from '../ports/i-character.repository';
+import { IStoragePort } from 'src/modules/users/application/ports/i-storage.port';
+
+@Injectable()
+export class UploadAvatarUseCase {
+  constructor(
+    @Inject('CHAR_REPO')    private readonly chars: ICharacterRepository,
+    @Inject('STORAGE')      private readonly storage: IStoragePort,
+  ) {}
+
+  /**
+   * 1. Verifica personaje existe y es propiedad del user en el controller.
+   * 2. Sube buffer a storage → devuelve URL.
+   * 3. Asigna avatarUrl, persiste y devuelve DTO público.
+   */
+  async execute(charId: string, buffer: Buffer, mime: string) {
+    // 1) Obtener personaje
+    const char = await this.chars.findById(charId);
+    if (!char) throw new NotFoundException('Personaje no encontrado');
+
+    // 2) Subir archivo y obtener URL
+    const url = await this.storage.uploadAvatar(charId, buffer, mime);
+    
+    // 3) Asignar y guardar
+    char.avatarUrl = url;
+    const saved = await this.chars.save(char);
+
+    // 4) Devolver proyección pública
+    return this.chars.project(saved);
+  }
+}

@@ -1673,3 +1673,261 @@ Reúne los casos de uso y consulta para ser consumido por el **UsersController**
 ### Mantén este lienzo actualizado
 
 Cada vez que cambies reglas (p.ej. permitir cambio de e‑mail), añade la sección correspondiente para que el equipo tenga siempre la referencia correcta.
+
+
+
+
+
+
+# Lienzo Completo: Módulo **Characters**
+
+Este lienzo recoge la definición exhaustiva del micro‑dominio **Characters** en el backend de Larping & Go.
+
+---
+
+## 1 · Propósito y Contexto
+
+El micro‑dominio **Characters** gestiona la creación, consulta y edición de personajes LARP. Cada usuario puede tener múltiples personajes, con:
+
+* Propiedades estructuradas (físicas, sociales, general, relaciones y personalizadas).
+* Avatar subido.
+* Estado de visibilidad y soft‑delete.
+
+Se integra con **UsersModule** para autenticación y **IStoragePort** para subida de avatares.
+
+---
+
+## 2 · Estructura del Módulo
+
+```
+modules/characters/
+├── application/
+│   ├── characters.service.ts
+│   ├── ports/
+│   │   └── i-character.repository.ts
+│   ├── use-cases/
+│   │   ├── create-character.use-case.ts
+│   │   ├── update-character.use-case.ts
+│   │   ├── delete-character.use-case.ts
+│   │   ├── list-characters.use-case.ts
+│   │   ├── list-character-properties.use-case.ts
+│   │   ├── upsert-property.use-case.ts
+│   │   ├── remove-property.use-case.ts
+│   │   ├── upload-avatar.use-case.ts
+│   │   └── get-public-character.use-case.ts
+│   └── dto/
+│       ├── create-character.dto.ts
+│       ├── update-character.dto.ts
+│       ├── character-property.dto.ts
+│       ├── public-character.dto.ts
+│       └── change-avatar.dto.ts
+├── domain/
+│   ├── entities/
+│   │   ├── character.entity.ts
+│   │   └── character-property.entity.ts
+│   └── value-objects/
+│       └── slug.vo.ts
+├── infrastructure/
+│   ├── controllers/
+│   │   └── characters.controller.ts
+│   ├── repositories/
+│   │   └── character.repository.ts
+│   └── providers/
+│       └── default-properties.provider.ts
+└── characters.module.ts
+```
+
+---
+
+## 3 · Modelo de Dominio
+
+### `Character`
+
+* **Campos**: `id`, `user` (dueño), `name`, `slug`, `avatarUrl`, `bio`, `backstory`, `visibility`, `isActive`, timestamps.
+* **Relación**: 1‑N con `CharacterProperty`.
+* **Hooks**: `@BeforeInsert()` genera `slug` por defecto.
+* **Serialización**: Getter `publicProfile` con `@Expose()`.
+
+### `CharacterProperty`
+
+* **Campos**: `id`, FK `character_id`, `group` (physical|social|general|relation|custom), `key` (snake\_case), `value` (JSON nullable), `valueType` (text|number|boolean|list), `order`, timestamps.
+* **Índice**: único `(character, key)`.
+
+---
+
+## 4 · DTOs
+
+* **CreateCharacterDto**: `name`, `bio?`, `backstory?`, `visibility?`, `properties?[]`.
+* **UpdateCharacterDto** = `PartialType(CreateCharacterDto)`.
+* **CharacterPropertyDto**: `group`, `key`, `value`, `valueType`, `order?`.
+* **PublicCharacterDto**: `id`, `name`, `slug`, `avatarUrl?`, `bio?`, `properties?[]`.
+* **ChangeAvatarDto**: `avatarUrl`.
+
+---
+
+## 5 · Value Object: **Slug**
+
+```ts
+class Slug {
+  static create(raw: string): Slug; // valida regex ^[a-z0-9-]{2,80}$
+  toString(): string;
+}
+```
+
+Garantiza identificador URL‑friendly.
+
+---
+
+## 6 · Puertos (Ports)
+
+* **ICharacterRepository**:
+
+  * Lectura: `listByUser`, `findById`, `findBySlug`, `existsNameForUser`.
+  * Escritura: `create`, `save`, `softDelete`.
+  * Propiedades: `upsertProperty`, `removeProperty`.
+  * Proyección: `project`.
+
+* **IStoragePort** (de UsersModule): `uploadAvatar(id, buffer, mime): Promise<string>`.
+
+* **IDefaultCharacterPropertiesProvider**: `getDefaults(): CharacterPropertyDto[]`.
+
+---
+
+## 7 · Infraestructura
+
+### CharacterRepository
+
+* **Lectura**: `.find()` con `relations: { properties }`.
+* **Transacción**: en `upsertProperty` usando `ds.transaction(async manager)`.
+* **Soft‑delete**: marca `isActive = false`.
+* **project()**: construye `PublicCharacterDto`.
+
+### DefaultPropertiesProvider
+
+Carga `DEFAULT_CHARACTER_PROPERTIES` con `value = null` y `order`.
+
+---
+
+## 8 · Casos de Uso (Use-Cases)
+
+1. **CreateCharacterUseCase**
+2. **UpdateCharacterUseCase**
+3. **DeleteCharacterUseCase**
+4. **ListCharactersUseCase**
+5. **ListCharacterPropertiesUseCase**
+6. **UpsertPropertyUseCase**
+7. **RemovePropertyUseCase**
+8. **UploadAvatarUseCase**
+9. **GetPublicCharacterUseCase**
+
+Cada uno inyecta repositorio y, si aplica, provider de defaults o storage.
+
+---
+
+## 9 · Facade: `CharactersService`
+
+Métodos:
+
+* `createCharacter(userId, dto)`
+* `updateCharacter(id, dto)`
+* `deleteCharacter(id)`
+* `listMyCharacters(userId)`
+* `listProperties(userId, charId)`
+* `upsertProperty(id, dto)`
+* `removeProperty(id, pid)`
+* `uploadAvatar(id, buffer, mime)`
+* `getPublicCharacter(slug)`
+
+---
+
+## 10 · Controlador HTTP
+
+| Ruta                                     | Método | Guard        | Body / Params           |
+| ---------------------------------------- | ------ | ------------ | ----------------------- |
+| POST `/characters`                       | create | JwtAuthGuard | CreateCharacterDto      |
+| GET  `/characters/me`                    | list   | JwtAuthGuard | —                       |
+| GET  `/characters/:slug`                 | public | none         | slug                    |
+| PUT  `/characters/:id`                   | update | JwtAuthGuard | UpdateCharacterDto      |
+| DELETE `/characters/:id`                 | delete | JwtAuthGuard | id                      |
+| GET  `/characters/:id/properties`        | props  | JwtAuthGuard | id                      |
+| POST `/characters/:id/properties`        | upsert | JwtAuthGuard | CharacterPropertyDto    |
+| DELETE `/characters/:id/properties/:pid` | remove | JwtAuthGuard | id, pid                 |
+| PUT  `/characters/:id/avatar`            | upload | JwtAuthGuard | multipart `avatar` file |
+
+---
+
+## 11 · Flujos Paso a Paso
+
+### Crear Personaje
+
+1. **Controller** recibe JSON + JWT.
+2. **Service** → `createUC.execute(userId, dto)`.
+3. **Use-Case**:
+
+   * Verifica user y unicidad.
+   * Combina defaults + `dto.properties`.
+   * Persiste con cascade.
+4. **Repo** guarda `characters` + `character_properties`.
+5. **Respuesta**: `PublicCharacterDto`.
+
+### Listar Propiedades
+
+1. **Controller** GET `/…/properties`.
+2. **Service** → `listPropsUC.execute(userId, charId)`.
+3. **Use-Case**: verifica dueño, devuelve `properties[]`.
+
+*(Update, Delete y demás siguen patrón Controller → Service → UC → Repo)*
+
+---
+
+## 12 · Ejemplos cURL
+
+```bash
+# Crear con defaults + override
+curl -X POST http://…/characters \
+  -H "Authorization: Bearer $TK" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Legolas","properties":[{"group":"general","key":"gender","value":"Masculino","valueType":"text"}]}'
+
+# Listar mis personajes
+curl http://…/characters/me -H "Authorization: Bearer $TK"
+
+# Listar propiedades
+echo
+curl http://…/characters/<CHAR_ID>/properties -H "Authorization: Bearer $TK"
+```
+
+---
+
+## 13 · Datos Clave
+
+* **Default Properties** inyectadas por `DEFAULT_PROPS`.
+* **Formato de key**: snake\_case alfanumérico.
+* **Sin campo attributes**: todo va en `character_properties`.
+* **Avatares**: servidos desde `/static/avatars/<filename>`.
+
+---
+
+## 14 · Errores Comunes
+
+* **404**: personaje no existe.
+* **403**: acceso a personaje ajeno.
+* **409**: nombre duplicado.
+* **413**: avatar >2 MB.
+
+---
+
+*Fin del lienzo.*
+
+
+
+
+
+
+
+
+
+
+
+
+

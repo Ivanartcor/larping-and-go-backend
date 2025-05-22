@@ -29,6 +29,9 @@ import { GetPublicProfileQuery } from './application/queries/get-public-profile.
 
     UsersService,
   ],
-  exports: [UsersService],
+  exports: [UsersService,
+    'STORAGE',
+    'USER_REPO',
+  ],
 })
 export class UsersModule {}

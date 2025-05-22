@@ -5,6 +5,7 @@ import {
 import { Length, IsOptional, IsBoolean } from 'class-validator';
 import { User } from '../../../users/domain/entities/user.entity';
 import { CharacterProperty } from './character-property.entity';
+import { Expose } from 'class-transformer';
 
 @Entity('characters')
 @Index('ux_char_user_name', ['user', 'name'], { unique: true })
@@ -41,9 +42,6 @@ export class Character {
     @IsOptional()
     backstory?: string;
 
-    @Column({ type: 'jsonb', default: {} })
-    attributes!: Record<string, unknown>;
-
     /* Flags */
     @Column({ default: true })
     @IsBoolean()
@@ -68,4 +66,18 @@ export class Character {
             this.slug = this.name.toLowerCase().replace(/\s+/g, '-');
         }
     }
+
+
+    /* Getter para serialización pública --------------- */
+@Expose()
+get publicProfile(): {
+  id: string; slug: string; name: string; avatarUrl?: string;
+} {
+  return {
+    id:   this.id,
+    slug: this.slug,
+    name: this.name,
+    avatarUrl: this.avatarUrl,
+  };
+}
 }

@@ -57,12 +57,12 @@ export class UserRepository implements IUserRepository {
      * y devuelve el usuario con la relación actualizada.
      */
     async setActiveCharacter(userId: string, characterId: string): Promise<User> {
-        return this.ds.transaction(async (tx) => {
+        return this.ds.transaction(async (manager) => {
 
             let char: Character;
             try {
                 // 1. Verifica propiedad y estado del personaje
-                char = await tx.getRepository(Character).findOneOrFail({
+                char = await manager.getRepository(Character).findOneOrFail({
                     where: {
                         id: characterId,
                         user: { id: userId },
@@ -80,10 +80,10 @@ export class UserRepository implements IUserRepository {
             }
 
             // 2. Actualiza FK
-            await tx.update(User, { id: userId }, { activeCharacter: { id: char.id } });
+            await manager.update(User, { id: userId }, { activeCharacter: { id: char.id } });
 
             // 3. Devuelve el usuario con relaciones
-            return tx.findOneOrFail(User, {
+            return manager.findOneOrFail(User, {
                 where: { id: userId },
                 relations: { activeCharacter: true },
             });
