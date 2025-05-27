@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
-import { DatabaseModule } from './database/database.module';    // 👈 nuevo
+import { DatabaseModule } from './database/database.module';    
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -9,6 +9,7 @@ import { validationSchema } from './config/validation.schema';
 import configuration from './config/configuration';
 import { UsersModule } from './modules/users/users.module';
 import { CharactersModule } from './modules/characters/characters.module';
+import { GuildsModule } from './modules/guilds/guilds.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CharactersModule } from './modules/characters/characters.module';
     AuthModule,
     UsersModule,
     CharactersModule,
+    GuildsModule,
 
   ],
   controllers: [AppController],

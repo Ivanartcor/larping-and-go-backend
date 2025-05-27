@@ -1917,7 +1917,138 @@ curl http://…/characters/<CHAR_ID>/properties -H "Authorization: Bearer $TK"
 
 ---
 
-*Fin del lienzo.*
+
+
+**Organizando la documentación**
+
+Parece que el usuario quiere crear un lienzo para el microdominio de la guilda, donde se resumen todo lo hecho en fase 0-1, incluyendo lógica y flujos, y con una estructura para el archivo README. Necesito detallar las entidades, un sistema de roles, y los flujos de creación, listado público, membresía y roles. Proveeré una sección en markdown con la visión general, los endpoints implementados y los flujos que explican el funcionamiento.
+
+Pensado durante 12 segundos
+
+## 🗂️ Lienzo del micro-dominio **Guilds (Hermandades)**
+
+> Documento vivo que centraliza **visión, reglas, entidades, flujos y API** del módulo Guilds.
+> Se actualizará a medida que avancemos por las fases 2-7.
+
+---
+
+### 1 · Propósito
+
+Proveer una capa completa para la **gestión de hermandades** dentro de Larping & Go:
+
+* Organización interna basada en **roles jerárquicos con permisos**.
+* Flujos de **membresía** (invitaciones, solicitudes, código).
+* Herramientas de comunidad: **tablón** (anuncios / encuestas), **eventos internos** y **chat** (futuro).
+
+---
+
+### 2 · Entidades y relaciones
+
+| Entidad                                                      | Rol                                                                                                       | Relaciones clave                                                                                  |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Guild**                                                    | Agregado raíz. Datos públicos, reglas, privacidad, líder.                                                 | 1 \:N `GuildRole`, 1 \:N `GuildMembership`, 1 \:N `GuildAnnouncement`, 1 \:N `GuildInternalEvent` |
+| **GuildRole**                                                | Rol personalizado con jerarquía (`position`) y máscara de permisos (`permissions`).                       | N : 1 `Guild`                                                                                     |
+| **GuildMembership**                                          | Vincula un **User** a una **Guild** con un **GuildRole** y `status` (`pending / active / kicked / left`). | N : 1 `Guild`, N : 1 `User`, N : 1 `GuildRole`                                                    |
+| **GuildInvite**                                              | Invitaciones/solicitudes de acceso (token, expiración, email…).                                           | N : 1 `Guild`, N : 1 `User` (sender)                                                              |
+| **GuildAnnouncement**                                        | Publicaciones en tablón (`general` / `poll`).                                                             | N : 1 `Guild`, 1 \:N `GuildPollOption`, 1 \:N `GuildVote`                                         |
+| **GuildInternalEvent**                                       | Eventos privados de la guild (entrenos, reuniones).                                                       | N : 1 `Guild`, 1 \:N `GuildEventAttendance`                                                       |
+| **GuildPollOption**, **GuildVote**, **GuildEventAttendance** | Tablas de apoyo a encuestas y asistencia.                                                                 | —                                                                                                 |
+
+**Diagramita lógico**
+
+```
+users ─╴< guild_memberships >╶─ guilds ─╶< guild_roles
+                           ╰─< guild_announcements >─╶< guild_poll_options >╶─< guild_votes
+                           ╰─< guild_internal_events >╶< guild_event_attendance
+                           ╰─< guild_invites
+```
+
+---
+
+### 3 · Sistema de permisos
+
+Bit-mask (`int`, 0–6):
+
+| Bit   | Valor   | Permiso                | Descripción                      |
+| ----- | ------- | ---------------------- | -------------------------------- |
+| 0     | 1       | **EDIT\_INFO**         | Modificar datos de la guild      |
+| 1     | 2       | **MANAGE\_MEMBERS**    | Aceptar / expulsar miembros      |
+| 2     | 4       | **MANAGE\_ROLES**      | Editar roles inferiores          |
+| 3     | 8       | **POST\_ANNOUNCEMENT** | Publicar en tablón               |
+| 4     | 16      | **CREATE\_EVENTS**     | Crear eventos internos           |
+| 5     | 32      | **CHAT**               | Enviar mensajes en chat (futuro) |
+| 6     | 64      | **CREATE\_ROLES**      | Añadir roles nuevos              |
+| **—** | **127** | **ALL**                | Rol líder (posición 0)           |
+
+---
+
+### 4 · Arquitectura (DDD / puertos y adaptadores)
+
+```
+guilds
+├─ domain
+│   ├─ entities      (Guild, GuildRole, GuildMembership …)
+│   └─ dto           (create-guild.dto, public-guild.dto …)
+├─ application
+│   ├─ ports         (i-guild.repository.ts)
+│   ├─ use-cases     (CreateGuildUseCase …)
+│   ├─ queries       (GetGuildPublicQuery, ListGuildsQuery)
+│   └─ guilds.service.ts   ← façade
+├─ infrastructure
+│   ├─ repositories  (guild.repository.ts)
+│   └─ controllers   (guilds.controller.ts)
+└─ guilds.module.ts
+```
+
+---
+
+### 5 · Flujos implementados (Fase 0-1 ✅)
+
+| Caso de uso         | Paso a paso                                                                                                                                                                                              | Regla destacada                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| **Crear guild**     | 1) Auth → `userId`.2) `CreateGuildUC` verifica unicidad `name`.3) Construye `Guild` + rol **Líder** (`position 0`, perms = ALL).4) Transacción: guarda guild → rol → membership líder (`memberCount=1`). | El rol “Líder” es único (`is_leader=true`) e inmutable. |
+| **Listado público** | `ListGuildsQuery` recupera guilds `isActive=true AND privacy=public`, orden `memberCount DESC`, filtro `ILIKE('%q%')`.                                                                                   | Search simple; se añadirá full-text index.              |
+| **Perfil público**  | `GetGuildPublicQuery` busca por `slug` y devuelve DTO público.                                                                                                                                           | Solo guilds activas y públicas.                         |
+
+**Endpoints (REST)**
+
+| Método & ruta        | Auth | Descripción                      |
+| -------------------- | ---- | -------------------------------- |
+| `POST /guilds`       | JWT  | Crear hermandad                  |
+| `GET  /guilds`       | —    | Listar públicas (`?q=` opcional) |
+| `GET  /guilds/:slug` | —    | Perfil público                   |
+
+---
+
+### 6 · Próximas fases
+
+| Fase  | Tema                                              | Permisos requeridos             |
+| ----- | ------------------------------------------------- | ------------------------------- |
+| **2** | Update / delete guild, transfer leadership        | EDIT\_INFO + reglas jerárquicas |
+| **3** | CRUD de roles & asignación                        | MANAGE\_ROLES / CREATE\_ROLES   |
+| **4** | Flujos de membresía (invites, kick, leave)        | MANAGE\_MEMBERS                 |
+| **5** | Tablón (anuncios & polls)                         | POST\_ANNOUNCEMENT              |
+| **6** | Eventos internos & asistencia                     | CREATE\_EVENTS                  |
+| **7** | Cron de expiración de invitaciones + enlace token | —                               |
+
+*(Ver tabla de ruta de trabajo PR en conversación)*
+
+---
+
+### 7 · Reglas de negocio claves
+
+1. **Jerarquía** – Un miembro solo puede gestionar roles con `position` mayor (rango inferior).
+2. **Líder** – Rol único e inmutable; transferencia de liderazgo solo por el líder.
+3. \*\*Contador \*\*\`\` – Se actualiza al aceptar/expulsar miembros (trigger pendiente Fase 4).
+4. **Privacy & Access** – `privacy=private` oculta en buscador; `accessType` define flujo de entrada.
+5. **Soft-delete** – `isActive=false` desactiva guild pero preserva historial.
+
+---
+
+#### Última actualización · 23 may 2025
+
+\*(Completada Fase 0-1) \*
+
 
 
 

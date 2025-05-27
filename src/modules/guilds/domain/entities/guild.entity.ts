@@ -46,8 +46,8 @@ export enum GuildAccess {
 @Index('ix_guild_leader', ['leader'])
 @Check(`"member_count" >= 1`)
 /*
- * Si finalmente añades un trigger que compruebe que leader_user_id pertenece
- * a guild_memberships y al rol líder, podrás eliminar la lógica del servicio.
+ * Si finalmente añado un trigger que compruebe que leader_user_id pertenece
+ * a guild_memberships y al rol líder, puedo eliminar la lógica del servicio.
  * Ejemplo SQL (comentado):
  * CHECK ( EXISTS (
  *     SELECT 1 FROM guild_memberships gm
@@ -108,9 +108,13 @@ export class Guild {
   accessType!: GuildAccess;
 
   /** Hash SHA-256 del código (no se expone) */
-  @Column({ name: 'access_code_hash', length: 255, nullable: true })
+  @Column({
+    name: 'access_code_hash',
+    type: 'text',
+    nullable: true
+  })
   @Exclude()
-  accessCodeHash?: string;
+  accessCodeHash?: string | null;
 
   /* ------------------------------------------------------------------ */
   /* Relaciones                                                         */
@@ -171,7 +175,7 @@ export class Guild {
 
   /**
    * Tras crear la hermandad, el servicio debe insertar la membership del líder.
-   * Aquí lanzamos un evento de dominio (o se deja en blanco si usas CQRS).
+   * Aquí lanzamos un evento de dominio (o se deja en blanco si uso CQRS).
    */
   @AfterInsert()
   emitCreatedEvent() {
