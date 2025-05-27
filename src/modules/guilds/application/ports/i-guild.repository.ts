@@ -32,5 +32,23 @@ export interface IGuildRepository {
   findMembership(userId: string, guildId: string): Promise<GuildMembership | null>;
 
 
+  listRoles(guildId: string): Promise<GuildRole[]>;
+
+  createRole(role: GuildRole): Promise<GuildRole>;
+  updateRole(role: GuildRole): Promise<GuildRole>;
+  deleteRole(roleId: string): Promise<void>;
+
+  roleExistsByName(guildId: string, name: string): Promise<boolean>;
+  roleExistsByPosition(guildId: string, position: number): Promise<boolean>;
+
+  findRoleById(roleId: string): Promise<GuildRole | null>;
+
+  roleHasMembers(roleId: string): Promise<boolean>;
+
+ /**desplazamiento automático de posiciones de roles */
+  shiftRolePositions(guildId: string, from: number, to: number, excludeId: string): Promise<void>;
+
+  updateRolePosition(roleId: string, newPos: number): Promise<void>;
+
 
 }

@@ -19,6 +19,9 @@ import { GuildPermissions } from '../decorators/guild-permissions.decorator';
 import { GuildPermission } from '../../domain/entities/guild-role.entity';
 import { UpdateGuildDto } from '../../domain/dto/update-guild.dto';
 import { TransferLeaderDto } from '../../domain/dto/transfer-leader.dto';
+import { CreateRoleDto } from '../../domain/dto/role/create-role';
+import { UpdateRoleDto } from '../../domain/dto/role/update-role';
+import { AssignRoleDto } from '../../domain/dto/role/assin-role';
 
 @ApiTags('guilds')
 @Controller('guilds')
@@ -82,5 +85,67 @@ export class GuildsController {
   }
 
   //planeado uno que me devuelva el accesscode, otro que me devuelva la info completa de la hermandad, otro que me devueva la info completa del miembro
-  
+
+
+  /*  ROLES  ───────────────────────────────────────────────────── */
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
+  @GuildPermissions(GuildPermission.CREATE_ROLES)
+  @Post(':id/roles')
+  createRole(
+    @Param('id') id: string,
+    @Body() dto: CreateRoleDto,
+    @Req() req,
+  ) {
+    return this.guilds.createRole(id, dto, req.guildMembership);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard)
+  @Get(':id/roles')
+  listRoles(@Param('id') id: string) {
+    return this.guilds.listRoles(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
+  @GuildPermissions(GuildPermission.MANAGE_ROLES)
+  @Put(':id/roles/:roleId')
+  updateRole(
+    @Param('id') id: string,
+    @Param('roleId') roleId: string,
+    @Body() dto: UpdateRoleDto,
+    @Req() req,
+  ) {
+    return this.guilds.updateRole(id, roleId, dto, req.guildMembership);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
+  @GuildPermissions(GuildPermission.MANAGE_ROLES)
+  @Delete(':id/roles/:roleId')
+  deleteRole(
+    @Param('id') id: string,
+    @Param('roleId') roleId: string,
+    @Req() req,
+  ) {
+    return this.guilds.deleteRole(id, roleId, req.guildMembership);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
+  @GuildPermissions(GuildPermission.MANAGE_MEMBERS)
+  @Patch(':id/roles/assign')
+  assignRole(
+    @Param('id') id: string,
+    @Body() dto: AssignRoleDto,
+    @Req() req,
+  ) {
+    return this.guilds.assignRole(id, dto, req.guildMembership);
+  }
+
+
+  //Vamos a meter un endpoint para mostrar una lista de todos los roles de la hermandad
+
 }

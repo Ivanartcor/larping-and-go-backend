@@ -91,8 +91,8 @@ export class GuildRepository implements IGuildRepository {
   }
 
   saveMembership(membership: GuildMembership) {
-  return this.memberships.save(membership);
-}
+    return this.memberships.save(membership);
+  }
 
 
 
@@ -113,6 +113,74 @@ export class GuildRepository implements IGuildRepository {
       },
       relations: { role: true, guild: true },
     });
+  }
+
+  /* ---------- Roles ---------- */
+  listRoles(guildId: string) {
+    return this.roles.find({
+      where: { guild: { id: guildId } },
+      order: { position: 'ASC' },
+    });
+  }
+
+  async createRole(role: GuildRole) {
+    return this.roles.save(role);
+  }
+
+  async updateRole(role: GuildRole) {
+    return this.roles.save(role);
+  }
+
+  async deleteRole(roleId: string) {
+    const { affected } = await this.roles.delete(roleId);
+    if (!affected) throw new NotFoundException('Rol no encontrado');
+  }
+
+  roleExistsByName(guildId: string, name: string) {
+    return this.roles.exist({
+      where: { guild: { id: guildId }, name: ILike(name) },
+    });
+  }
+
+  roleExistsByPosition(guildId: string, pos: number) {
+    return this.roles.exist({
+      where: { guild: { id: guildId }, position: pos },
+    });
+  }
+
+
+  roleHasMembers(roleId: string) {
+    return this.memberships.exist({
+      where: { role: { id: roleId }, status: MembershipStatus.ACTIVE }
+    }
+    )
+  }
+
+  findRoleById(roleId: string) {
+    return this.roles.findOne({
+      where: { id: roleId }, relations: { guild: true }
+    });
+  }
+
+  /* Desplazamiento de posiciones de roles*/
+async shiftRolePositions(guildId: string, from: number, to: number, excludeId: string) {
+  if (from === to) return;
+
+  const dir = to < from ? +1 : -1;
+  const [min, max] = dir === +1 ? [to, from - 1] : [from + 1, to];
+
+  await this.roles.createQueryBuilder()
+    .update()
+    .set({ position: () => `position + ${dir}` })
+    .where('guild_id = :g AND position BETWEEN :min AND :max AND id <> :ex',
+           { g: guildId, min, max, ex: excludeId })
+    .execute();
+}
+
+
+
+  async updateRolePosition(roleId: string, pos: number) {
+    await this.roles.update({ id: roleId }, { position: pos });
   }
 
 }

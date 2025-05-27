@@ -26,6 +26,11 @@ import { DeleteGuildUseCase } from './application/use-cases/delete-guild.use-cas
 import { TransferLeadershipUseCase } from './application/use-cases/transfer-leadership.use-case';
 import { GuildMemberGuard } from './infrastructure/guards/guild-member.guard';
 import { GuildPermissionsGuard } from './infrastructure/guards/guild-permissions.guard';
+import { ListRolesQuery } from './application/queries/list-roles.query';
+import { AssignRoleUseCase } from './application/use-cases/role/assign-role.use-case';
+import { CreateRoleUseCase } from './application/use-cases/role/create-role.use-case';
+import { DeleteRoleUseCase } from './application/use-cases/role/delete-role.use-case';
+import { UpdateRoleUseCase } from './application/use-cases/role/update-role.use-case';
 
 
 @Module({
@@ -39,13 +44,21 @@ import { GuildPermissionsGuard } from './infrastructure/guards/guild-permissions
     { provide: 'GUILD_REPO', useClass: GuildRepository },
 
     /* Casos de uso / queries */
-    CreateGuildUseCase,
+   
     GetGuildPublicQuery,
     ListGuildsQuery,
-    GetGuildInternalQuery,
+    GetGuildInternalQuery, 
+    ListRolesQuery,
+    
+    CreateGuildUseCase,
     UpdateGuildUseCase,
     DeleteGuildUseCase,
     TransferLeadershipUseCase,
+    
+    CreateRoleUseCase,
+    UpdateRoleUseCase,
+    DeleteRoleUseCase,
+    AssignRoleUseCase,
 
     /* Guards */
     GuildMemberGuard,
