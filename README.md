@@ -1919,42 +1919,41 @@ curl http://…/characters/<CHAR_ID>/properties -H "Authorization: Bearer $TK"
 
 
 
-**Organizando la documentación**
 
-Parece que el usuario quiere crear un lienzo para el microdominio de la guilda, donde se resumen todo lo hecho en fase 0-1, incluyendo lógica y flujos, y con una estructura para el archivo README. Necesito detallar las entidades, un sistema de roles, y los flujos de creación, listado público, membresía y roles. Proveeré una sección en markdown con la visión general, los endpoints implementados y los flujos que explican el funcionamiento.
 
-Pensado durante 12 segundos
 
-## 🗂️ Lienzo del micro-dominio **Guilds (Hermandades)**
 
-> Documento vivo que centraliza **visión, reglas, entidades, flujos y API** del módulo Guilds.
-> Se actualizará a medida que avancemos por las fases 2-7.
 
----
 
-### 1 · Propósito
+# 📚 Lienzo Integral del Micro‑Dominio **Guilds (Hermandades)** · Larping & Go
 
-Proveer una capa completa para la **gestión de hermandades** dentro de Larping & Go:
-
-* Organización interna basada en **roles jerárquicos con permisos**.
-* Flujos de **membresía** (invitaciones, solicitudes, código).
-* Herramientas de comunidad: **tablón** (anuncios / encuestas), **eventos internos** y **chat** (futuro).
+> Documento vivo que centraliza **visión, reglas, entidades, flujos y API** del módulo *Guilds*. Se actualiza conforme avanzan las fases del desarrollo.
 
 ---
 
-### 2 · Entidades y relaciones
+## 1 · Propósito
+
+Crear una capa robusta para la **gestión de hermandades**, que permita:
+
+* Estructurar la comunidad mediante **roles jerárquicos con permisos**.
+* Gestionar **membresías** (invitaciones, solicitudes, códigos de acceso).
+* Ofrecer herramientas sociales internas: **tablón** (anuncios / encuestas), **eventos** y, en un futuro, **chat en tiempo real**.
+
+---
+
+## 2 · Modelo de Entidades y Relaciones
 
 | Entidad                                                      | Rol                                                                                                       | Relaciones clave                                                                                  |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Guild**                                                    | Agregado raíz. Datos públicos, reglas, privacidad, líder.                                                 | 1 \:N `GuildRole`, 1 \:N `GuildMembership`, 1 \:N `GuildAnnouncement`, 1 \:N `GuildInternalEvent` |
-| **GuildRole**                                                | Rol personalizado con jerarquía (`position`) y máscara de permisos (`permissions`).                       | N : 1 `Guild`                                                                                     |
-| **GuildMembership**                                          | Vincula un **User** a una **Guild** con un **GuildRole** y `status` (`pending / active / kicked / left`). | N : 1 `Guild`, N : 1 `User`, N : 1 `GuildRole`                                                    |
-| **GuildInvite**                                              | Invitaciones/solicitudes de acceso (token, expiración, email…).                                           | N : 1 `Guild`, N : 1 `User` (sender)                                                              |
-| **GuildAnnouncement**                                        | Publicaciones en tablón (`general` / `poll`).                                                             | N : 1 `Guild`, 1 \:N `GuildPollOption`, 1 \:N `GuildVote`                                         |
-| **GuildInternalEvent**                                       | Eventos privados de la guild (entrenos, reuniones).                                                       | N : 1 `Guild`, 1 \:N `GuildEventAttendance`                                                       |
-| **GuildPollOption**, **GuildVote**, **GuildEventAttendance** | Tablas de apoyo a encuestas y asistencia.                                                                 | —                                                                                                 |
+| **Guild**                                                    | Agregado raíz. Datos públicos, reglas, privacidad y líder.                                                | 1 \:N `GuildRole`, 1 \:N `GuildMembership`, 1 \:N `GuildAnnouncement`, 1 \:N `GuildInternalEvent` |
+| **GuildRole**                                                | Rol personalizado (`position`, `permissions`).                                                            | N : 1 `Guild`                                                                                     |
+| **GuildMembership**                                          | Une **User** y **Guild** mediante un **GuildRole** + `status` (`pending` / `active` / `kicked` / `left`). | N : 1 `Guild`, N : 1 `User`, N : 1 `GuildRole`                                                    |
+| **GuildInvite**                                              | Invitaciones / solicitudes de acceso.                                                                     | N : 1 `Guild`, N : 1 `User` (sender)                                                              |
+| **GuildAnnouncement**                                        | Publicaciones de tablón (`general` / `poll`).                                                             | N : 1 `Guild`, 1 \:N `GuildPollOption`, 1 \:N `GuildVote`                                         |
+| **GuildInternalEvent**                                       | Eventos internos (entrenos, reuniones).                                                                   | N : 1 `Guild`, 1 \:N `GuildEventAttendance`                                                       |
+| **GuildPollOption**, **GuildVote**, **GuildEventAttendance** | Soporte para encuestas y asistencia.                                                                      | —                                                                                                 |
 
-**Diagramita lógico**
+### 2.1 Diagrama lógico resumido
 
 ```
 users ─╴< guild_memberships >╶─ guilds ─╶< guild_roles
@@ -1965,100 +1964,579 @@ users ─╴< guild_memberships >╶─ guilds ─╶< guild_roles
 
 ---
 
-### 3 · Sistema de permisos
+## 3 · Sistema de Roles y Permisos
 
-Bit-mask (`int`, 0–6):
+Bit‑mask (`int`, 0 – 6):
 
-| Bit   | Valor   | Permiso                | Descripción                      |
-| ----- | ------- | ---------------------- | -------------------------------- |
-| 0     | 1       | **EDIT\_INFO**         | Modificar datos de la guild      |
-| 1     | 2       | **MANAGE\_MEMBERS**    | Aceptar / expulsar miembros      |
-| 2     | 4       | **MANAGE\_ROLES**      | Editar roles inferiores          |
-| 3     | 8       | **POST\_ANNOUNCEMENT** | Publicar en tablón               |
-| 4     | 16      | **CREATE\_EVENTS**     | Crear eventos internos           |
-| 5     | 32      | **CHAT**               | Enviar mensajes en chat (futuro) |
-| 6     | 64      | **CREATE\_ROLES**      | Añadir roles nuevos              |
-| **—** | **127** | **ALL**                | Rol líder (posición 0)           |
+| Bit | Valor   | Permiso                | Descripción breve                |
+| --- | ------- | ---------------------- | -------------------------------- |
+|  0  |  1      | **EDIT\_INFO**         | Editar datos de la guild         |
+|  1  |  2      | **MANAGE\_MEMBERS**    | Aceptar / expulsar miembros      |
+|  2  |  4      | **MANAGE\_ROLES**      | Editar roles inferiores          |
+|  3  |  8      | **POST\_ANNOUNCEMENT** | Publicar en el tablón            |
+|  4  |  16     | **CREATE\_EVENTS**     | Crear eventos internos           |
+|  5  |  32     | **CHAT**               | Enviar mensajes en chat (futuro) |
+|  6  |  64     | **CREATE\_ROLES**      | Crear nuevos roles               |
+|  —  | **127** | **ALL**                | Permisos completos (rol Líder)   |
 
 ---
 
-### 4 · Arquitectura (DDD / puertos y adaptadores)
+## 4 · Arquitectura de Carpetas (DDD)
 
 ```
 guilds
 ├─ domain
 │   ├─ entities      (Guild, GuildRole, GuildMembership …)
-│   └─ dto           (create-guild.dto, public-guild.dto …)
+│   └─ dto           (create-guild.dto, guild-details.dto …)
 ├─ application
 │   ├─ ports         (i-guild.repository.ts)
-│   ├─ use-cases     (CreateGuildUseCase …)
-│   ├─ queries       (GetGuildPublicQuery, ListGuildsQuery)
-│   └─ guilds.service.ts   ← façade
+│   ├─ use-cases     (CreateGuildUseCase, UpdateGuildUseCase …)
+│   ├─ queries       (GetGuildPublicQuery, GetGuildInternalQuery …)
+│   └─ guilds.service.ts ← façade
 ├─ infrastructure
 │   ├─ repositories  (guild.repository.ts)
-│   └─ controllers   (guilds.controller.ts)
+│   ├─ controllers   (guilds.controller.ts)
+│   └─ guards & decorators (GuildMemberGuard, GuildPermissionsGuard …)
 └─ guilds.module.ts
 ```
 
 ---
 
-### 5 · Flujos implementados (Fase 0-1 ✅)
+## 5 · Flujos implementados (Fases 0 – 2 ✅)
 
-| Caso de uso         | Paso a paso                                                                                                                                                                                              | Regla destacada                                         |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| **Crear guild**     | 1) Auth → `userId`.2) `CreateGuildUC` verifica unicidad `name`.3) Construye `Guild` + rol **Líder** (`position 0`, perms = ALL).4) Transacción: guarda guild → rol → membership líder (`memberCount=1`). | El rol “Líder” es único (`is_leader=true`) e inmutable. |
-| **Listado público** | `ListGuildsQuery` recupera guilds `isActive=true AND privacy=public`, orden `memberCount DESC`, filtro `ILIKE('%q%')`.                                                                                   | Search simple; se añadirá full-text index.              |
-| **Perfil público**  | `GetGuildPublicQuery` busca por `slug` y devuelve DTO público.                                                                                                                                           | Solo guilds activas y públicas.                         |
-
-**Endpoints (REST)**
-
-| Método & ruta        | Auth | Descripción                      |
-| -------------------- | ---- | -------------------------------- |
-| `POST /guilds`       | JWT  | Crear hermandad                  |
-| `GET  /guilds`       | —    | Listar públicas (`?q=` opcional) |
-| `GET  /guilds/:slug` | —    | Perfil público                   |
+| Caso de uso              | Paso a paso                                                                                                                                                                                                             | Regla destacada                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| **Crear guild**          | 1) Auth → `userId`. 2) `CreateGuildUC` valida unicidad `name`. 3) Construye `Guild` + rol **Líder** (`position 0`, perms = ALL). 4) Transacción: guarda guild → rol → membership líder (`memberCount = 1`).             | El rol Líder es único (`is_leader = true`) e inmutable. |
+| **Listado público**      | `ListGuildsQuery` filtra `isActive = TRUE` & `privacy = PUBLIC`, orden `memberCount DESC`, búsqueda `ILIKE('%q%')`.                                                                                                     | Search simple; se añadirá full‑text index.              |
+| **Perfil público**       | `GetGuildPublicQuery` → slug → DTO público.                                                                                                                                                                             | Sólo guilds activas y públicas.                         |
+| **Actualizar guild**     | `PUT /guilds/:id` protegido. `UpdateGuildUC` requiere `EDIT_INFO` o ser Líder. Valida unicidad, gestiona `privacy` / `accessType` / `accessCode` (SHA‑256) y responde con **GuildDetailsDto** (sin filtrar privacidad). | `accessType = code` ⇒ `accessCode` obligatorio.         |
+| **Soft‑delete guild**    | `DELETE /guilds/:id` — solo Líder. `DeleteGuildUC` marca `isActive = false`.                                                                                                                                            | La guild deja de aparecer en buscador público.          |
+| **Transferir liderazgo** | `PATCH /guilds/:id/leader` — Líder designa `newLeaderUserId`. `TransferLeadershipUC` verifica membresía activa y transfiere `leader_user_id` + rol líder.                                                               | Siempre hay un único Líder (`position 0`).              |
 
 ---
 
-### 6 · Próximas fases
+## 6 · Endpoints REST actuales
 
-| Fase  | Tema                                              | Permisos requeridos             |
-| ----- | ------------------------------------------------- | ------------------------------- |
-| **2** | Update / delete guild, transfer leadership        | EDIT\_INFO + reglas jerárquicas |
-| **3** | CRUD de roles & asignación                        | MANAGE\_ROLES / CREATE\_ROLES   |
-| **4** | Flujos de membresía (invites, kick, leave)        | MANAGE\_MEMBERS                 |
-| **5** | Tablón (anuncios & polls)                         | POST\_ANNOUNCEMENT              |
-| **6** | Eventos internos & asistencia                     | CREATE\_EVENTS                  |
-| **7** | Cron de expiración de invitaciones + enlace token | —                               |
-
-*(Ver tabla de ruta de trabajo PR en conversación)*
+| Método & ruta               | Autenticación                 | Descripción                                  |
+| --------------------------- | ----------------------------- | -------------------------------------------- |
+| `POST   /guilds`            | JWT                           | Crear hermandad                              |
+| `GET    /guilds`            | —                             | Listar hermandades públicas (`?q=` opcional) |
+| `GET    /guilds/:slug`      | —                             | Perfil público de una guild                  |
+| `PUT    /guilds/:id`        | JWT + miembro con `EDIT_INFO` | Actualizar datos internos                    |
+| `DELETE /guilds/:id`        | JWT + Líder                   | Desactivar (soft‑delete)                     |
+| `PATCH  /guilds/:id/leader` | JWT + Líder                   | Transferir liderazgo                         |
 
 ---
 
-### 7 · Reglas de negocio claves
+## 7 · Roadmap (Próximas fases)
 
-1. **Jerarquía** – Un miembro solo puede gestionar roles con `position` mayor (rango inferior).
-2. **Líder** – Rol único e inmutable; transferencia de liderazgo solo por el líder.
-3. \*\*Contador \*\*\`\` – Se actualiza al aceptar/expulsar miembros (trigger pendiente Fase 4).
-4. **Privacy & Access** – `privacy=private` oculta en buscador; `accessType` define flujo de entrada.
-5. **Soft-delete** – `isActive=false` desactiva guild pero preserva historial.
+| Fase  | Tema                                                | Permisos requeridos             |
+| ----- | --------------------------------------------------- | ------------------------------- |
+| **3** | CRUD de roles & asignación                          | `MANAGE_ROLES` / `CREATE_ROLES` |
+| **4** | Flujos de membresía (invites, kick, leave)          | `MANAGE_MEMBERS`                |
+| **5** | Tablón (anuncios & polls)                           | `POST_ANNOUNCEMENT`             |
+| **6** | Eventos internos & asistencia                       | `CREATE_EVENTS`                 |
+| **7** | Cron para expiración de invitaciones + enlace‑token | —                               |
 
 ---
 
-#### Última actualización · 23 may 2025
+## 8 · Reglas de negocio clave
 
-\*(Completada Fase 0-1) \*
+1. **Jerarquía de roles** — Un miembro sólo gestiona roles con `position` mayor (rango inferior).
+2. **Rol Líder** — Único, inmutable; sólo el Líder puede transferir liderazgo.
+3. **Contador `memberCount`** — Se actualizará vía trigger cuando cambie el número de miembros (pendiente Fase 4).
+4. **Privacy & Access** — `privacy = PRIVATE` oculta la guild en búsquedas; `accessType` define el flujo de entrada (*public / invite / code*).
+5. **Soft‑delete** — `isActive = false` desactiva la guild sin perder historial.
+
+---
+
+## 9 · Historial de actualizaciones
+
+| Fecha       | Cambios                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 27 may 2025 | **Fase 2 completada**: actualización, soft‑delete y transferencia de liderazgo; guards de permisos; Query interna sin filtro de privacidad. |
+| 23 may 2025 | Fase 0‑1 (bootstrap + CRUD mínimo + listado & perfil público).                                                                              |
+
+---
+
+> **Estado actual:** Fases 0–2 terminadas y operativas. Siguiente objetivo → **Fase 3: sistema avanzado de roles personalizados.**
 
 
 
 
 
 
+# 🗂️ Lienzo del Micro‑Dominio **Guilds** – Fase 3 📜
+
+### Sistema de Roles Personalizados
+
+> Versión 1.0 · 27 may 2025
+
+---
+
+## 1 · Alcance de la fase
+
+Implementar un sistema completo de **roles jerárquicos** dentro de la guild:
+
+* CRUD de roles (excepto el rol *Líder*, reservado).
+* Desplazamiento automático de posiciones para mantener la jerarquía y la clave única `(guild_id, position)`.
+* Asignación/cambio de rol a miembros activos.
+* Validaciones de permisos (`CREATE_ROLES`, `MANAGE_ROLES`, `MANAGE_MEMBERS`).
+* Actualización de guards y endpoints.
+
+---
+
+## 2 · Entidades afectadas
+
+| Entidad             | Cambios / Notas                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **GuildRole**       | ▶ Nuevo algoritmo de re‑orden: posición *centinela* → shift → destino.<br>▶ Método de utilidad `hasPermission()` ya existente. |
+| **GuildMembership** | ▶ `role` ahora puede cambiar vía `AssignRoleUseCase` manteniendo integridad.                                                   |
+
+---
+
+## 3 · Métodos añadidos al repositorio
+
+| Firma                                                          | Descripción                                                      |
+| -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `listRoles(guildId)`                                           | Devuelve roles ordenados por `position`.                         |
+| `createRole(role)` / `updateRole(role)` / `deleteRole(roleId)` | CRUD básico.                                                     |
+| `shiftRolePositions(guildId, from, to, excludeId)`             | Desplaza un bloque de posiciones `±1` dentro de una transacción. |
+| `updateRolePosition(roleId, newPos)`                           | Paso intermedio al mover un rol.                                 |
+| `roleExistsByName / roleExistsByPosition`                      | Validaciones de unicidad.                                        |
+| `findRoleById(roleId)`                                         | Recupera rol + relación `guild`.                                 |
+| `roleHasMembers(roleId)`                                       | Bloquea la eliminación si el rol está asignado.                  |
+
+---
+
+## 4 · DTO y validaciones
+
+* **CreateRoleDto** — nombre (2‑40), color HEX, posición ≥1, permisos 0‑127.
+* **UpdateRoleDto** — `PartialType` del anterior.
+* **AssignRoleDto** — `memberId`, `roleId` (UUID).
+
+---
+
+## 5 · Casos de Uso (resumen)
+
+| UC               | Permiso          | Regla clave                                                                    |
+| ---------------- | ---------------- | ------------------------------------------------------------------------------ |
+| **CreateRoleUC** | `CREATE_ROLES`   | Solo bajo tu rango; nombre & posición únicas.                                  |
+| **UpdateRoleUC** | `MANAGE_ROLES`   | Rol objetivo debe estar bajo tu rango; algoritmo de desplazamiento automático. |
+| **DeleteRoleUC** | `MANAGE_ROLES`   | Prohíbe borrar líder o roles con miembros.                                     |
+| **AssignRoleUC** | `MANAGE_MEMBERS` | No puedes asignar roles ≥ tu rango.                                            |
+
+---
+
+## 6 · Guards y decorador reutilizados
+
+* `JwtAuthGuard`  → token válido.
+* `GuildMemberGuard` → adjunta `req.guildMembership`.
+* `GuildPermissionsGuard` + `@GuildPermissions(...)` → comprueba bits contra rol o líder.
+
+---
+
+## 7 · Endpoints REST añadidos
+
+| Método & ruta                      | Permiso          | Descripción                              |
+| ---------------------------------- | ---------------- | ---------------------------------------- |
+| `POST   /guilds/:id/roles`         | `CREATE_ROLES`   | Crea un rol personalizado.               |
+| `GET    /guilds/:id/roles`         | Miembro          | Lista roles ordenados.                   |
+| `PUT    /guilds/:id/roles/:roleId` | `MANAGE_ROLES`   | Edita rol (nombre/color/perms/posición). |
+| `DELETE /guilds/:id/roles/:roleId` | `MANAGE_ROLES`   | Elimina rol (si sin miembros).           |
+| `PATCH  /guilds/:id/roles/assign`  | `MANAGE_MEMBERS` | Cambia el rol de un miembro activo.      |
+
+---
+
+## 8 · Flujo de re‑ordenamiento automático
+
+```text
+1. Cliente solicita mover Rol C de posición 4 → 2.
+2. UC mueve Rol C a posición centinela (10 000) para liberar la clave.
+3. `shiftRolePositions` incrementa (+1) posiciones 2‑3‑4 → 3‑4‑5.
+4. Rol C se establece finalmente en posición 2.
+```
+
+> Así se evita la colisión con el índice único `ux_role_position`.
+
+---
+
+## 9 · Reglas de negocio añadidas
+
+1. **Posición 0** está reservada al *rol Líder* (`isLeader=true`); es inmutable.
+2. La **jerarquía** se define sólo por `position` (menor ⇒ mayor rango).
+3. Cada operación comprueba que `role.position > currentMember.position`, salvo si
+   el solicitante es líder (bypass completo).
+4. No se permiten “agujeros” tras re‑ordenar; el shift mantiene la secuencia.
+
+---
+
+## 10 · Próximos pasos
+
+| Fase  | Tema                                                    |
+| ----- | ------------------------------------------------------- |
+| **4** | Flujos de membresía (invites, solicitudes, kick, leave) |
+| **5** | Tablón interno (anuncios, encuestas)                    |
+| **6** | Eventos internos y asistencia                           |
+| **7** | Cron expiración de invitaciones + enlace token          |
+
+---
+
+### Última actualización · 27 may 2025
 
 
 
 
 
+
+# Larping & Go · Backend
+
+## Micro‑dominio Guilds · **Fase 4 – Flujos de membresía**
+
+Versión 2025‑05‑30
+
+---
+
+### 🎯 Propósito
+
+Implementar el ciclo de vida completo de los **miembros de hermandad**:
+
+* Solicitud de acceso, invitación directa, invitación por enlace.
+* Aceptación / rechazo / cancelación.
+* Unirse con token público.
+* Expulsión (kick) y salida voluntaria (leave).
+* Mantenimiento consistente de `memberCount` y jerarquía de roles.
+
+---
+
+### 1. Entidades y cambios
+
+| Entidad                 | Cambios clave                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **`guild_invites`**     | Relaciones `senderUser`, `targetUser` ahora se cargan en queries.<br>Validaciones por tipo (`invite` / `request`). |
+| **`guild_memberships`** | Nuevo método `findMembershipAny` para reactivar filas *kicked/left* y evitar violar `ux_gm_user_guild`.            |
+| **`guild_roles`**       | Helper `findLowestRole` y creación on‑the‑fly de rol «Miembro» si sólo existe el líder.                            |
+
+---
+
+### 2. Repositorio (`GuildRepository`)
+
+* **Invites** `createInvite`, `updateInvite`, `findInviteById`, `findInviteByHash`, `listPendingInvites` (con relaciones).
+* **Memberships** `createMembership`, `updateMembership`, `findMembershipAny`, `listMembers`, `countActiveMembers`.
+* **Roles** `findLowestRole`, `createRole` (uso interno al reactivar miembros).
+
+---
+
+### 3. Casos de uso
+
+| UC                | Responsable  | Descripción                                                                                                 |
+| ----------------- | ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `RequestJoinUC`   | Usuario      | Crea `guild_invite` tipo *request* si la guild lo permite.                                                  |
+| `JoinByCodeUC`    | Usuario      | Comprueba `accessCodeHash`, reactiva o crea membership activa.                                              |
+| `SendInviteUC`    | Moderador    | Envía invitación directa (`invite`) o por email. Sólo `MANAGE_MEMBERS`.                                     |
+| `HandleInviteUC`  | Moderador    | Gestiona *request* (`accepted/rejected`) o cancela *invite*.<br>Reactiva/crea membership y ajusta contador. |
+| `RespondInviteUC` | Destinatario | Acepta / rechaza *invite* directa. Reactiva/crea membership.                                                |
+| `KickMemberUC`    | Moderador    | Cambia `status → kicked`, `leftAt`, contador −1.                                                            |
+| `LeaveGuildUC`    | Miembro      | Cambia `status → left`, valida que no sea líder.                                                            |
+
+---
+
+### 4. Endpoints REST
+
+```
+POST   /guilds/:id/requests             (user)           # RequestJoinUC
+POST   /guilds/:id/join/:token          (user)           # JoinByCodeUC
+GET    /guilds/:id/invites              (moderator)      # listPendingInvites
+POST   /guilds/:id/invites              (moderator)      # SendInviteUC
+PATCH  /guilds/:id/invites/:invId       (moderator)      # HandleInviteUC
+PATCH  /guilds/:id/invites/:invId/respond (target user)  # RespondInviteUC
+GET    /guilds/:id/members              (member)         # listMembers
+DELETE /guilds/:id/members              (moderator)      # KickMemberUC (body: memberId)
+DELETE /guilds/:id/leave                (member)         # LeaveGuildUC
+```
+
+*Protección*: `JwtAuthGuard` global; `GuildMemberGuard` donde aplique;
+`GuildPermissionsGuard` con bit `MANAGE_MEMBERS` para endpoints de gestión.
+
+---
+
+### 5. Reglas de negocio
+
+* Índice único `(user_id, guild_id)` se respeta reactivando registros.
+* El **líder** no puede ser expulsado ni abandonar sin transferir liderazgo.
+* `memberCount ≥ 1`; incrementa/decrementa en UCs y se puede reforzar con trigger.
+* Invitación **directa** sólo puede cancelarla el moderador, aceptarla el destinatario.
+* Petición **request** sólo la gestiona el moderador (`accepted/rejected`).
+* En guilds con sólo el rol líder se autogenera «Miembro» posición 1.
+
+---
+
+### 6. Cron de expiración
+
+Tarea horaria marca `status = expired` cuando `now() > expires_at` y `pending`.
+
+---
+
+### 7. Pruebas esenciales
+
+1. Kick → invitation → accept → **reactiva** membership y contador correcto.
+2. Invitación directa aceptada por otro usuario ⇒ *Forbidden*.
+3. Solicitud aceptada por moderador crea miembro y +1.
+4. `memberCount` coincide con `SELECT COUNT(*) WHERE status='active'`.
+
+---
+
+### 8. Pendientes futuros
+
+* Notificación por correo al enviar invitación `email`.
+* Eventos WebSocket para avisos en tiempo real (invitaciones, kicks).
+* Página de ajustes para desactivar solicitudes públicas.
+
+---
+
+*Fase 4 completada. Listo para integrar en README principal.*
+
+### 🔬 Casos de prueba exhaustivos
+
+| #  | Escenario                                        | Precondición                                                        | Pasos                                                                                                                              | Resultado esperado                                                  |
+| -- | ------------------------------------------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 1  | **Solicitud → Aceptada**                         | User *A* no es miembro                                              | 1. A envía `POST /guilds/{id}/requests`<br>2. Moderador *M* (`MANAGE_MEMBERS`) `PATCH /invites/{reqId}` body `{status:'accepted'}` | Invite → `accepted` · Membership `active` para A · `memberCount` +1 |
+| 2  | **Solicitud → Rechazada**                        | Igual a #1                                                          | 1. A envía request<br>2. M `PATCH` `{status:'rejected'}`                                                                           | Invite → `rejected` · Sin membership · `memberCount` sin cambios    |
+| 3  | **Invitación directa → Aceptada**                | A no es miembro                                                     | 1. M `POST /invites` `{targetUserId:A}`<br>2. A `PATCH /invites/{id}/respond` `{accept:true}`                                      | Invite → `accepted` · Membership `active` para A · `memberCount` +1 |
+| 4  | **Invitación directa → Rechazada**               | Igual a #3                                                          | 2. A responde `{accept:false}`                                                                                                     | Invite → `rejected` · `memberCount` sin cambios                     |
+| 5  | **Invitación directa → Cancelada por moderador** | Invitación pendiente                                                | M `PATCH /invites/{id}` `{status:'cancelled'}`                                                                                     | Invite → `cancelled`                                                |
+| 6  | **Link público (TOKEN) → Alta**                  | Guild accessType=`code` · A no es miembro                           | A `POST /join/{token}`                                                                                                             | Membership `active` · `memberCount` +1                              |
+| 7  | **Kick**                                         | A es miembro (rol posición 3), M rol 1                              | M `DELETE /members` body `{memberId:A}`                                                                                            | Membership status `kicked` · `memberCount` -1                       |
+| 8  | **Re‑invitar Kickeado**                          | A status `kicked`                                                   | M re‑invita (#3) → A acepta                                                                                                        | Membership reactivada (misma fila) · `memberCount` +1               |
+| 9  | **Leave**                                        | A rol >0                                                            | A `DELETE /leave`                                                                                                                  | Membership `left` · `memberCount` -1                                |
+| 10 | **Leader cannot leave**                          | L es líder                                                          | L `DELETE /leave`                                                                                                                  | 403 Forbidden                                                       |
+| 11 | **Member cannot kick higher rank**               | B rol pos 2, A rol pos 1                                            | B intenta kick A                                                                                                                   | 403 Forbidden                                                       |
+| 12 | **Moderator cannot accept own invite**           | M envía invite a C, intenta `PATCH accepted`                        | 403 Forbidden (`Sólo cancelar`)                                                                                                    |                                                                     |
+| 13 | **Expired invite**                               | Invite con `expiresAt` < now                                        | Cron marca `expired`                                                                                                               | Token falla con 403                                                 |
+| 14 | **Counter integrity**                            | Comparar `guild.memberCount` con `COUNT(*)` de memberships `active` | Siempre igual (trigger opcional)                                                                                                   |                                                                     |
+
+> **Cobertura**: solicitudes, invitaciones directas, enlaces, re‑ingresos tras kick, privilegios jerárquicos, contador.
+
+
+
+
+
+# Micro‑dominio **Guilds** · Fase 5 — Announcements & Polls
+
+## 0. Visión
+
+Permitir a cada hermandad publicar anuncios (texto libre) y encuestas (polls) en un tablón interno accesible sólo a sus miembros.
+
+* **Announcements** (`type = general`) → simple entrada de texto.
+* **Polls** (`type = poll`) → colección de opciones con recuento de votos.
+
+La fase cubre:
+
+1. CRUD completo de anuncios/encuestas.
+2. Votación con reglas (multi‑select, maxChoices).
+3. Paginación real del tablón.
+4. Cierre automático de encuestas mediante cron.
+5. Endpoint de detalle (incluye resultados y votos propios).
+6. Hooks opcionales vía WebSockets.
+
+---
+
+## 1. Modelo de datos
+
+### 1.1 `guild_announcements`
+
+| Campo                     | Tipo                                        | Notas |
+| ------------------------- | ------------------------------------------- | ----- |
+| id                        | uuid PK                                     |       |
+| guild\_id                 | FK → guilds.id                              |       |
+| author\_user\_id          | FK → users.id ( NULL SET )                  |       |
+| author\_character\_id     | FK → characters.id ( NULL )                 |       |
+| title                     | varchar(120)                                |       |
+| content                   | text                                        |       |
+| **type**                  | enum `general \| poll`                      |       |
+| close\_at                 | timestamptz NULL (solo poll)                |       |
+| show\_results             | boolean default true                        |       |
+| multi\_select             | boolean default false                       |       |
+| max\_choices              | int NULL (≥2)                               |       |
+| **is\_closed**            | boolean default false *(añadido en Fase 5)* |       |
+| created\_at / updated\_at |                                             |       |
+
+#### Restricciones
+
+* CHECK: `(type='poll' AND close_at IS NOT NULL) OR (type='general' AND close_at IS NULL)`
+* Índices: `ix_ga_type`, `ix_ga_guild_created`, `ix_ga_closed`.
+
+### 1.2 `guild_poll_options`
+
+| Campo            | Tipo                                 | Detalle |
+| ---------------- | ------------------------------------ | ------- |
+| id               | uuid PK                              |         |
+| announcement\_id | FK → guild\_announcements.id         |         |
+| option\_text     | varchar(120)                         |         |
+| position         | int (0,1,2…)                         |         |
+| votes\_count     | int DEFAULT 0 *(trigger o servicio)* |         |
+
+### 1.3 `guild_votes`
+
+Sin cambios (ya definido). Índice único `(poll_option_id,user_id)`.
+
+---
+
+## 2. API REST
+
+| Método     | Ruta                               | Guardias                                                  | Descripción                                                                                               |
+| ---------- | ---------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **POST**   | `/guilds/:id/board`                | `Jwt`,`GuildMember`,`GuildPermissions(POST_ANNOUNCEMENT)` | Crea anuncio/poll.                                                                                        |
+| **GET**    | `/guilds/:id/board?page=N`         | `Jwt`,`GuildMember`                                       | Listado paginado (20 por pág., devuelve meta `{page,perPage,total,totalPages}`)                           |
+| **GET**    | `/guilds/:id/board/:annId`         | `Jwt`,`GuildMember`                                       | Detalle anuncio. Incluye resultados/votos propios según reglas.                                           |
+| **PUT**    | `/guilds/:id/board/:annId`         | `Jwt`,`GuildMember`                                       | Autor **o** permiso `POST_ANNOUNCEMENT`. Permite convertir `general⇄poll`, editar reglas si no hay votos. |
+| **DELETE** | idem                               |                                                           | Borra anuncio/poll.                                                                                       |
+| **POST**   | `/guilds/:id/board/:annId/votes`   | `Jwt`,`GuildMember`                                       | Emite voto(s) respetando reglas (`multiSelect`, `maxChoices`, `is_closed`).                               |
+| **GET**    | `/guilds/:id/board/:annId/results` | `Jwt`,`GuildMember`                                       | Resultado encuesta (‐→ `GetPollResultsUseCase`).                                                          |
+
+---
+
+## 3. Casos de uso principales
+
+| UC                           | Fichero                                           | Resumen                                                                                               |
+| ---------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `CreateAnnouncementUseCase`  | `use-cases/board/create-announcement.use-case.ts` | Valida campos, crea anuncio. En polls exige ≥2 opciones y `closeAt` futura.                           |
+| `ListAnnouncementsQuery`     | `queries/board/list-announcements.query.ts`       | Devuelve paginación real (SQL `LIMIT/OFFSET`, `COUNT(*)`).                                            |
+| `GetAnnouncementDetailQuery` | `queries/board/get-announcement-detail.query.ts`  | Proyección completa + votos propios.                                                                  |
+| `UpdateAnnouncementUseCase`  | `use-cases/board/update-announcement.use-case.ts` | Autor/moderador puede convertir tipo, cambiar reglas u opciones (solo si no hay votos).               |
+| `DeleteAnnouncementUseCase`  | …                                                 |                                                                                                       |
+| `VotePollUseCase`            | `use-cases/board/vote.use-case.ts`                | Bloquea si `isClosed` o `closeAt ≤ now`. Controla `multiSelect` y `maxChoices`. Actualiza contadores. |
+| `GetPollResultsUseCase`      | `use-cases/board/get-poll-results.use-case.ts`    | Aplica reglas de visibilidad (`showResults` o `isClosed` o permisos).                                 |
+| `CloseExpiredPollsJob`       | `jobs/close-expired-polls.job.ts`                 | Cron (30 min) ‑→ `findExpiredOpenPolls(now)` → `closePoll(id)` → (opcional) notifica vía gateway.     |
+
+---
+
+## 4. Repositorio (`GuildRepository`)
+
+* **Nuevos métodos**
+
+  * `findAnnouncementWithOptions`, `findExpiredOpenPolls`, `closePoll`, `countVotesByOption`, `deletePollOptions`, `deleteVotesByAnnouncement`, `findVotesByUser`.
+* Se añaden `@InjectRepository(GuildVote)` y utilidades `LessThan`.
+
+---
+
+## 5. Permisos & reglas
+
+* Crear / editar / borrar requiere `POST_ANNOUNCEMENT` **o** ser autor original.
+* Votar: miembro activo, encuesta no cerrada.
+* Ver resultados
+
+  * `showResults = true` **o** `isClosed = true` **o** rol con `POST_ANNOUNCEMENT`.
+* Conversión `poll→general` sólo si `countVotesByOption = 0`.
+
+---
+
+## 6. Cron‑flow (encuestas caducadas)
+
+1. Job corre cada 30 min.
+2. Selecciona polls con `isClosed=false AND closeAt < now`.
+3. Marca `isClosed=true`, deja `showResults` intacto.
+4. Envía evento `poll.closed` (si gateway activo).
+
+---
+
+## 7. WebSockets (opcional)
+
+* **Channel**: `guild:{guildId}`.
+* Eventos: `announcement.created/updated/deleted`, `poll.voted`, `poll.closed`.
+* Gateway (`GuildBoardGateway`) usa `@WebSocketGateway({ namespace:'/guilds' })`.
+
+---
+
+## 8. Migraciones SQL
+
+```sql
+-- F5‑01 add is_closed
+ALTER TABLE guild_announcements
+ADD COLUMN is_closed boolean NOT NULL DEFAULT false;
+CREATE INDEX ix_ga_closed ON guild_announcements (is_closed);
+```
+
+(Opcional gatillo para actualizar `votes_count` en `guild_poll_options` al INSERT/DELETE en `guild_votes`).
+
+---
+
+## 9. Casos de prueba principales
+
+1. **Crear general**, listar pag‑1, pag‑2 → correcta paginación.
+2. **Convertir** general⇄poll (sin votos) → OK.
+3. **Intentar convertir** poll→general con votos → 403.
+4. **Votar** más de `maxChoices` → 400.
+5. **Resultados ocultos** antes de cierre (`showResults=false`) → votos=0.
+6. Job marca `isClosed=true`; resultados accesibles.
+
+---
+
+## 10. Tareas pendientes
+
+* Implementar gateway tiempo‑real (si se desea).
+* Notificación email/WebPush tras cierre de encuesta.
+* Paginación configurable (`perPage` query‑param).
+
+---
+
+Fase 5 queda **cerrada**: el micro‑dominio cuenta con flujo completo de anuncios y encuestas, reglas de permisos exhaustivas, paginación, cron de cierre y DTOs consistentes para el front‑end.
+
+---
+
+## 11. Plan de pruebas y ejemplos Postman
+
+A continuación se integran los casos de prueba manuales y automatizados elaborados durante la fase 5. Incluyen comandos *curl* / colecciones Postman para verificar permisos, reglas de negocio y respuesta de cada endpoint.
+
+### 11.1 Matriz de casos
+
+| ID   | Endpoint                | Escenario                        | Auth        | Resultado esperado     |
+| ---- | ----------------------- | -------------------------------- | ----------- | ---------------------- |
+| T‑1  | **POST** `/board`       | Crear anuncio *general*          | `TK_MOD`    | **201** – JSON anuncio |
+| T‑2  | ↓                       | Crear anuncio sin permiso        | `TK_MEMBER` | **403**                |
+| T‑3  | ↓                       | Crear *poll* falta `closeAt`     | `TK_MOD`    | **400**                |
+| T‑4  | **PUT** `/board/:annId` | Cambiar `content` (autor)        | `TK_MEMBER` | **200**                |
+| T‑5  | ↓                       | Cambiar `options` con votos      | `TK_MOD`    | **400**                |
+| T‑6  | ↓                       | Intentar `type`→`poll`           | `TK_MOD`    | **400**                |
+| T‑7  | **POST** `/votes`       | Voto simple                      | `TK_MEMBER` | **201**                |
+| T‑8  | ↓                       | Duplicar voto                    | `TK_MEMBER` | **409**                |
+| T‑9  | ↓                       | Votar encuesta cerrada           | `TK_MEMBER` | **400**                |
+| T‑10 | **GET** `/results`      | Poll abierta `showResults=false` | `TK_MEMBER` | **403**                |
+| T‑11 | ↓                       | Poll cerrada – ver resultados    | `TK_MEMBER` | **200** – porcentajes  |
+| T‑12 | **GET** `/board?page=2` | Paginación                       | `TK_MEMBER` | **200** – 0‑20 ítems   |
+
+> Los IDs T‑1 → T‑12 se automatizan bajo Jest e2e (carpeta `test/e2e/announcements.spec.ts`).
+
+### 11.2 Ejemplos Postman (punto 4)
+
+```http
+PUT {{base}}/guilds/{{guildId}}/board/{{annId}}
+Authorization: Bearer {{TK_MOD}}
+Content-Type: application/json
+
+{
+  "title": "Reunión actualizada",
+  "content": "Nueva fecha: miércoles 20 h"
+}
+```
+
+*Ver todos los ejemplos en la colección «Guild Board» adjunta al proyecto.*
+
+### 11.3 Cron / Cierre automático (test manual)
+
+1. Crear poll con `closeAt = now()+1min`.
+2. Esperar job `CloseExpiredPollsJob` (≤ 30 min) o forzar `await job.handle()` en test.
+3. Consultar `/results` → debería devolver votos aunque `showResults=false`.
+
+### 11.4 Cobertura
+
+* CRUD anuncios y encuestas.
+* Reglas `multiSelect`, `maxChoices`.
+* Permisos `POST_ANNOUNCEMENT` vs autor.
+* Flag `isClosed` + cron.
+* Paginación OFFSET/LIMIT.
+
+> Con esto se considera **Fase 5 completamente verificada**.
 
 
 

@@ -72,7 +72,7 @@ export class GuildAnnouncement {
 
     @Column({ name: 'close_at', type: 'timestamptz', nullable: true })
     @IsOptional()
-    closeAt?: Date; // sólo válido para polls
+    closeAt?: Date | null; // sólo válido para polls
 
     @Column({ name: 'show_results', default: true })
     @IsBoolean()
@@ -85,7 +85,12 @@ export class GuildAnnouncement {
     @Column({ name: 'max_choices', type: 'int', nullable: true })
     @IsOptional()
     @Min(2)
-    maxChoices?: number;
+    maxChoices?: number | null;
+
+    //flag
+    @Column({ name: 'is_closed', default: false })
+    @IsBoolean()
+    isClosed!: boolean;
 
     //El resto de la entidad permanece igual; la restricción se valida en DTO + servicio.
     /*

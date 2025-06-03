@@ -6,4 +6,5 @@ export const DEFAULT_CHARACTER_PROPERTIES: CharacterPropertyDto[] = [
   { group: 'social',   key: 'religion',   valueType: 'text',    value: null },
   { group: 'physical', key: 'hair_color', valueType: 'text',    value: null },
   // …añade aquí todas las que consideres base…
+  //las keys en vez de espacio "", tendrán "_"
 ];

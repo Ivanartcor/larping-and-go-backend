@@ -1,5 +1,5 @@
 import {
-  CanActivate, ExecutionContext, Inject, Injectable, NotFoundException,
+  CanActivate, ExecutionContext, Inject, Injectable, InternalServerErrorException, NotFoundException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
@@ -20,6 +20,10 @@ export class GuildMemberGuard implements CanActivate {
 
     const membership = await this.guilds.findMembership(user.id, guildId);
     if (!membership) throw new NotFoundException('No perteneces a la hermandad');
+
+     if (!membership.role)
+      throw new InternalServerErrorException('Membership sin rol cargado');
+
 
     request.guildMembership = membership;    // adelante para otros guards
     return true;

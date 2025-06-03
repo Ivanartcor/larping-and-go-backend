@@ -19,16 +19,40 @@ import { AssignRoleUseCase } from './use-cases/role/assign-role.use-case';
 import { CreateRoleDto } from '../domain/dto/role/create-role';
 import { UpdateRoleDto } from '../domain/dto/role/update-role';
 import { AssignRoleDto } from '../domain/dto/role/assin-role';
+import { ListMembersQuery } from './queries/list-members.query';
+import { ListPendingInvitesQuery } from './queries/list-pending-invites.query';
+import { HandleInviteUseCase } from './use-cases/member/handle-invite.use-case';
+import { JoinByCodeUseCase } from './use-cases/member/join-by-code.use-case';
+import { KickMemberUseCase } from './use-cases/member/kick-member.use-case';
+import { LeaveGuildUseCase } from './use-cases/member/leave-guild.use-case';
+import { RequestJoinUseCase } from './use-cases/member/request-join.use-case';
+import { SendInviteUseCase } from './use-cases/member/send-invite.use-case';
+import { RespondInviteUseCase } from './use-cases/member/respond-invite.use-case';
+import { CreateAnnouncementUseCase } from './use-cases/board/create-announcement.use-case';
+import { UpdateAnnouncementUseCase } from './use-cases/board/update-announcement.use-case';
+import { DeleteAnnouncementUseCase } from './use-cases/board/delete-announcement.use-case';
+import { VotePollUseCase } from './use-cases/board/vote-poll.use-case';
+import { ListAnnouncementsQuery } from './queries/list-announcements.query';
+import { GetPollResultsUseCase } from './use-cases/board/get-poll-results.use-case';
+import { GetAnnouncementDetailQuery } from './queries/get-announcement-detail.query';
+import { GuildMembership } from '../domain/entities/guild-membership.entity';
+import { CreateAnnouncementDto } from '../domain/dto/announcements/create-announcement.dto';
+import { RemoveVoteUseCase } from './use-cases/board/remove-vote.use-case';
 
 
 
 @Injectable()
 export class GuildsService {
   constructor(
-    private readonly createUC: CreateGuildUseCase,
+
     private readonly getPublicQ: GetGuildPublicQuery,
     private readonly listQ: ListGuildsQuery,
     private readonly getInternalQ: GetGuildInternalQuery,
+    private readonly listMemQ: ListMembersQuery,
+    private readonly listInvQ: ListPendingInvitesQuery,
+    private readonly listAnnQ: ListAnnouncementsQuery,
+
+    private readonly createUC: CreateGuildUseCase,
     private readonly updateUC: UpdateGuildUseCase,
     private readonly deleteUC: DeleteGuildUseCase,
     private readonly transferUC: TransferLeadershipUseCase,
@@ -37,6 +61,20 @@ export class GuildsService {
     private readonly updateRoleUC: UpdateRoleUseCase,
     private readonly deleteRoleUC: DeleteRoleUseCase,
     private readonly assignRoleUC: AssignRoleUseCase,
+    private readonly sendInvUC: SendInviteUseCase,
+    private readonly handleInvUC: HandleInviteUseCase,
+    private readonly kickUC: KickMemberUseCase,
+    private readonly leaveUC: LeaveGuildUseCase,
+    private readonly requestUC: RequestJoinUseCase,
+    private readonly joinCodeUC: JoinByCodeUseCase,
+    private readonly respondInvUC: RespondInviteUseCase,
+    private readonly createAnnUC: CreateAnnouncementUseCase,
+    private readonly updateAnnUC: UpdateAnnouncementUseCase,
+    private readonly delAnnUC: DeleteAnnouncementUseCase,
+    private readonly voteUC: VotePollUseCase,
+    private readonly getResultsUC: GetPollResultsUseCase,
+    private readonly getAnnDetailQ: GetAnnouncementDetailQuery,
+    private readonly unvoteUC: RemoveVoteUseCase,
   ) { }
 
   create(userId: string, dto: CreateGuildDto) {
@@ -68,7 +106,7 @@ export class GuildsService {
     return this.transferUC.execute(guildId, userId, newLeaderId);
   }
 
- /* ---------- ROLES ---------- */
+  /* ---------- ROLES ---------- */
 
   listRoles(guildId: string) {
     return this.listRolesQ.execute(guildId);
@@ -110,5 +148,119 @@ export class GuildsService {
       membership.role.permissions,
     );
   }
+
+
+
+  /* ---------- Invitaciones ---------- */
+  listPendingInvites(guildId: string) {
+    return this.listInvQ.execute(guildId);
+  }
+
+  sendInvite(guildId: string, dto, membership, userId: string) {
+    return this.sendInvUC.execute(
+      guildId,
+      dto,
+      membership.role.position,
+      membership.role.permissions,
+      userId,
+    );
+  }
+
+  handleInvite(guildId: string, invId: string, dto, membership, moderatorId) {
+    return this.handleInvUC.execute(
+      guildId,
+      invId,
+      dto,
+      membership.role.position,
+      membership.role.permissions,
+      moderatorId,
+    );
+  }
+
+  respondInvite(userId: string, guildId: string, invId: string, accept: boolean) {
+    return this.respondInvUC.execute(userId, guildId, invId, accept);
+  }
+
+  /* ---------- Membresías ---------- */
+  listMembers(guildId: string) {
+    return this.listMemQ.execute(guildId);
+  }
+
+  requestJoin(userId: string, guildId: string) {
+    return this.requestUC.execute(userId, guildId);
+  }
+
+  joinByCode(userId: string, guildId: string, token: string) {
+    return this.joinCodeUC.execute(userId, guildId, token);
+  }
+
+  kick(guildId: string, dto, membership) {
+    return this.kickUC.execute(
+      guildId, dto,
+      membership.role.position,
+      membership.role.permissions,
+    );
+  }
+
+  leave(userId: string, guildId: string) {
+    return this.leaveUC.execute(userId, guildId);
+  }
+
+
+  /*boards / polls */
+ createAnnouncement(
+  guildId: string,
+  dto: CreateAnnouncementDto,
+  member: GuildMembership,   // ← ahora es el 3er parámetro
+  userId:  string,
+) {
+  const authorCharId =
+    member.role.isLeader
+      ? member.guild.leader?.activeCharacter?.id
+      : member.user.activeCharacter?.id;
+
+  return this.createAnnUC.execute(
+    guildId,
+    dto,
+    userId,
+    authorCharId,
+    member.role.permissions,   // ← ya no será undefined
+  );
+}
+  updateAnnouncement(gId: string, annId: string, dto, member) {
+    return this.updateAnnUC.execute(gId, annId, dto,
+      member.user.id, member.role.permissions);
+  }
+  deleteAnnouncement(gId: string, annId: string, member) {
+    return this.delAnnUC.execute(gId, annId, member.user.id,
+      member.role.permissions);
+  }
+  vote(gId: string, annId: string, dto, member) {
+    return this.voteUC.execute(gId, annId, member.user.id,
+      member.user.activeCharacter?.id, dto);
+  }
+
+  removeVote(gId: string, aId: string, oId: string, userId: string) {
+  return this.unvoteUC.execute(gId, aId, oId, userId);
+}
+
+
+  listAnnouncements(guildId: string, page = 1, perPage = 20) {
+    return this.listAnnQ.execute(guildId, page, perPage);
+  }
+
+  // guilds.service.ts
+getAnnouncement(gId: string, annId: string, membership) {
+  return this.getAnnDetailQ.execute(
+    gId, annId, membership.user.id, membership.role.permissions,
+  );
+}
+
+  
+getPollResults(gId: string, annId: string, m) {
+  return this.getResultsUC.execute(
+    gId, annId, m.user.id, m.role.permissions,
+  );
+}
 
 }
