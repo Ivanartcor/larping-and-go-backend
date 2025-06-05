@@ -21,7 +21,7 @@ export class UpdateGuildDto {
   @IsOptional() @Matches(/^[A-Za-z0-9]{6,20}$/)
   accessCode?: string;
 
-  @IsOptional() @Length(2, 80)
+  @IsOptional() @Length(2, 255)
   emblemUrl?: string;
 }
 

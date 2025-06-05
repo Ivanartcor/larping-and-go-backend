@@ -61,7 +61,7 @@ import {
     @IsHexColor()
     color!: string;           // "#aabbcc"
   
-    @Column({ length: 50, nullable: true })
+    @Column({ nullable: true })
     icon?: string;            // nombre de icono (FontAwesome, etc.)
   
     /** 0 significa nivel superior (rol líder) */

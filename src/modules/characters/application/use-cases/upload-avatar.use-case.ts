@@ -5,9 +5,9 @@ import { IStoragePort } from 'src/modules/users/application/ports/i-storage.port
 @Injectable()
 export class UploadAvatarUseCase {
   constructor(
-    @Inject('CHAR_REPO')    private readonly chars: ICharacterRepository,
-    @Inject('STORAGE')      private readonly storage: IStoragePort,
-  ) {}
+    @Inject('CHAR_REPO') private readonly chars: ICharacterRepository,
+    @Inject('STORAGE') private readonly storage: IStoragePort,
+  ) { }
 
   /**
    * 1. Verifica personaje existe y es propiedad del user en el controller.
@@ -20,13 +20,19 @@ export class UploadAvatarUseCase {
     if (!char) throw new NotFoundException('Personaje no encontrado');
 
     // 2) Subir archivo y obtener URL
-    const url = await this.storage.uploadAvatar(charId, buffer, mime);
-    
-    // 3) Asignar y guardar
-    char.avatarUrl = url;
-    const saved = await this.chars.save(char);
+    const newUrl = await this.storage.uploadAvatar(charId, buffer, mime);
+    const oldUrl =
+      char.avatarUrl?.startsWith('/static/avatars/') ? char.avatarUrl : undefined;
 
-    // 4) Devolver proyección pública
-    return this.chars.project(saved);
+    char.avatarUrl = newUrl;
+
+    try {
+      const saved = await this.chars.save(char);
+      if (oldUrl) await this.storage.remove(oldUrl);
+      return this.chars.project(saved);
+    } catch (e) {
+      await this.storage.remove(newUrl);
+      throw e;
+    }
   }
 }

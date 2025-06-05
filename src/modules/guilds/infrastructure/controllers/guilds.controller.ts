@@ -6,8 +6,10 @@ import {
   Delete,
   Patch,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 
 
 
@@ -29,6 +31,11 @@ import { KickMemberDto } from '../../domain/dto/invites/kick-member.dto';
 import { CreateAnnouncementDto } from '../../domain/dto/announcements/create-announcement.dto';
 import { VoteDto } from '../../domain/dto/announcements/vote.dto';
 import { UpdateAnnouncementDto } from '../../domain/dto/announcements/update-announcement.dto';
+import { CreateInternalEventDto } from '../../domain/dto/events/create-internal-event.dto';
+import { AttendanceDto } from '../../domain/dto/events/attendance.dto';
+import { ChangeStatusDto } from '../../domain/dto/events/change-status.dto';
+import { UpdateInternalEventDto } from '../../domain/dto/events/update-internal-event.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('guilds')
 @Controller('guilds')
@@ -63,12 +70,27 @@ export class GuildsController {
   @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
   @Put(':id')
   @GuildPermissions(GuildPermission.EDIT_INFO)
+
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('emblem', {
+      /* usamos Buffer, así que no hace falta diskStorage;
+         sólo ponemos validaciones */
+      limits: { fileSize: 10_000_000 },              // 10 MB
+      fileFilter: (_req, file, cb) => {
+        const ok = ['image/png', 'image/jpeg'].includes(file.mimetype);
+        cb(ok ? null : new Error('Invalid file type'), ok);
+      },
+    }),
+  )
+
   update(
     @Param('id') id: string,
     @Body() dto: UpdateGuildDto,
     @Req() req,
+    @UploadedFile() emblem?: Express.Multer.File,
   ) {
-    return this.guilds.update(req.user.id, id, dto, req.guildMembership);
+    return this.guilds.update(req.user.id, id, dto, req.guildMembership, emblem);
   }
 
   /* ---------- Eliminacion pasiva hermandad ------------ */
@@ -100,12 +122,20 @@ export class GuildsController {
   @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
   @GuildPermissions(GuildPermission.CREATE_ROLES)
   @Post(':id/roles')
+  @UseInterceptors(
+    FileInterceptor('icon', {
+      limits: { fileSize: 5_000_000 },
+      fileFilter: (_r, f, cb) =>
+        cb(null, ['image/png', 'image/jpeg'].includes(f.mimetype)),
+    }),
+  )
   createRole(
     @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Body() dto: CreateRoleDto,
     @Req() req,
   ) {
-    return this.guilds.createRole(id, dto, req.guildMembership);
+    return this.guilds.createRole(id, dto, req.guildMembership, file);
   }
 
   @ApiBearerAuth()
@@ -119,13 +149,21 @@ export class GuildsController {
   @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
   @GuildPermissions(GuildPermission.MANAGE_ROLES)
   @Put(':id/roles/:roleId')
+  @UseInterceptors(
+    FileInterceptor('icon', {
+      limits: { fileSize: 5_000_000 },
+      fileFilter: (_r, f, cb) =>
+        cb(null, ['image/png', 'image/jpeg'].includes(f.mimetype)),
+    }),
+  )
   updateRole(
     @Param('id') id: string,
     @Param('roleId') roleId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Body() dto: UpdateRoleDto,
     @Req() req,
   ) {
-    return this.guilds.updateRole(id, roleId, dto, req.guildMembership);
+    return this.guilds.updateRole(id, roleId, dto, req.guildMembership, file);
   }
 
   @ApiBearerAuth()
@@ -362,18 +400,18 @@ export class GuildsController {
   }
 
   @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, GuildMemberGuard)
-@Delete(':id/board/:annId/votes/:optId')
-unvote(
-  @Param('id')     guildId: string,
-  @Param('annId')  annId: string,
-  @Param('optId')  optId: string,
-  @Req()           req,
-){
-  return this.guilds.removeVote(
-    guildId, annId, optId, req.guildMembership.user.id,
-  );
-}
+  @UseGuards(JwtAuthGuard, GuildMemberGuard)
+  @Delete(':id/board/:annId/votes/:optId')
+  unvote(
+    @Param('id') guildId: string,
+    @Param('annId') annId: string,
+    @Param('optId') optId: string,
+    @Req() req,
+  ) {
+    return this.guilds.removeVote(
+      guildId, annId, optId, req.guildMembership.user.id,
+    );
+  }
 
 
   /** Resultados (si showResults = true o poll cerrado) */
@@ -388,6 +426,153 @@ unvote(
     return this.guilds.getPollResults(
       guildId,
       annId,
+      req.guildMembership,
+    );
+  }
+
+  /** Crear evento */
+  @Post(':id/events')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
+  @GuildPermissions(GuildPermission.CREATE_EVENTS)
+  createEvent(
+    @Param('id') guildId: string,
+    @Body() dto: CreateInternalEventDto,
+    @Req() req,
+  ) {
+    const m = req.guildMembership;
+    return this.guilds.createInternalEvent(
+      guildId,
+      dto,
+      req.user.id,
+      m.user.activeCharacter?.id,
+      m.role.permissions,
+    );
+  }
+
+  /** Editar evento */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
+  @Put(':id/events/:eventId')
+  @GuildPermissions(GuildPermission.CREATE_EVENTS)
+  updateEvent(
+    @Param('id') guildId: string,
+    @Param('eventId') eventId: string,
+    @Body() dto: UpdateInternalEventDto,
+    @Req() req,
+  ) {
+    return this.guilds.updateInternalEvent(
+      guildId,
+      eventId,
+      dto,
+      req.guildMembership,
+    );
+  }
+
+
+  /** Listado de eventos (paginado + filtro) */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard)
+  @Get(':id/events')
+  listEvents(
+    @Param('id') guildId: string,
+    @Query('filter') filter = 'upcoming',
+    @Query('page') page = '1',
+  ) {
+    return this.guilds.listInternalEvents(guildId, filter, page);
+  }
+
+  /** Detalle de evento */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard)
+  @Get(':id/events/:eventId')
+  eventDetail(
+    @Param('id') guildId: string,
+    @Param('eventId') eventId: string,
+  ) {
+    return this.guilds.getEventDetail(guildId, eventId);
+  }
+
+
+  /** Listado de asistentes (confirmados o todos) */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard)
+  @Get(':id/events/:eventId/attendances')
+  listAttendances(
+    @Param('id') guildId: string,
+    @Param('eventId') eventId: string,
+    @Query('filter') filter = 'confirmed',   // 'confirmed' | 'all'
+  ) {
+    return this.guilds.listEventAttendances(guildId, eventId, filter);
+  }
+
+  /** Confirmar asistencia */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard)
+  @Post(':id/events/:eventId/attendance')
+  confirmAttendance(
+    @Param('id') guildId: string,
+    @Param('eventId') eventId: string,
+    @Body() dto: AttendanceDto,
+    @Req() req,
+  ) {
+    return this.guilds.confirmAttendance(
+      guildId,
+      eventId,
+      dto,
+      req.user.id,
+    );
+  }
+
+  /** Cancelar asistencia */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard)
+  @Delete(':id/events/:eventId/attendance')
+  cancelAttendance(
+    @Param('id') guildId: string,
+    @Param('eventId') eventId: string,
+    @Req() req,
+  ) {
+    return this.guilds.cancelAttendance(
+      guildId,
+      eventId,
+      req.user.id,
+    );
+  }
+
+
+  /* ---------- Cambiar status (cancel / complete) ---------- */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
+  @Patch(':id/events/:eventId/status')
+  @GuildPermissions(GuildPermission.CREATE_EVENTS)   // líder también lo supera
+  changeStatus(
+    @Param('id') guildId: string,
+    @Param('eventId') eventId: string,
+    @Body() dto: ChangeStatusDto,
+    @Req() req,
+  ) {
+    return this.guilds.changeEventStatus(
+      guildId,
+      eventId,
+      dto,
+      req.guildMembership,
+    );
+  }
+
+  /* ---------- Toggle highlighted -------------------------- */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, GuildMemberGuard, GuildPermissionsGuard)
+  @Patch(':id/events/:eventId/highlight')
+  @GuildPermissions(GuildPermission.CREATE_EVENTS)
+  toggleHighlight(
+    @Param('id') guildId: string,
+    @Param('eventId') eventId: string,
+    @Req() req,
+  ) {
+    return this.guilds.toggleHighlight(
+      guildId,
+      eventId,
       req.guildMembership,
     );
   }

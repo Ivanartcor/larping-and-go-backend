@@ -6,11 +6,13 @@ import { IGuildRepository } from '../../ports/i-guild.repository';
 import { UpdateRoleDto } from 'src/modules/guilds/domain/dto/role/update-role';
 import { GuildPermission } from '../../../domain/entities/guild-role.entity';
 import { DataSource } from 'typeorm';
+import { IStoragePort } from 'src/modules/users/application/ports/i-storage.port';
 
 @Injectable()
 export class UpdateRoleUseCase {
   constructor(
     @Inject('GUILD_REPO') private readonly guilds: IGuildRepository,
+    @Inject('STORAGE') private readonly storage: IStoragePort,
     private readonly ds: DataSource,
   ) { }
 
@@ -20,6 +22,7 @@ export class UpdateRoleUseCase {
     dto: UpdateRoleDto,
     currentPos: number,
     perms: number,
+    iconFile?: Express.Multer.File,
   ) {
     if ((perms & GuildPermission.MANAGE_ROLES) === 0) {
       throw new ForbiddenException('Permiso MANAGE_ROLES requerido');
@@ -77,6 +80,24 @@ export class UpdateRoleUseCase {
     if (dto.icon !== undefined) role.icon = dto.icon;
     if (dto.permissions !== undefined) role.permissions = dto.permissions;
 
-    return this.guilds.updateRole(role);
+    /* Icono */
+    if (iconFile) {
+      const newUrl = await this.storage.uploadGuildAsset(
+        guildId, 'role-icon', iconFile.buffer, iconFile.mimetype,
+      );
+      const oldUrl = role.icon?.startsWith('/static/') ? role.icon : undefined;
+      role.icon = newUrl;
+
+      try {
+        await this.guilds.updateRole(role);
+        if (oldUrl) await this.storage.remove(oldUrl);
+      } catch (err) {
+        await this.storage.remove(newUrl);           // rollback
+        throw err;
+      }
+    } else if (dto.icon !== undefined) {
+      role.icon = dto.icon;  // string vacío ⇒ borrar icono
+      await this.guilds.updateRole(role);
+    }
   }
 }

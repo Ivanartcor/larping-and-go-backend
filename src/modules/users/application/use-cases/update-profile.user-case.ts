@@ -10,33 +10,45 @@ export class UpdateProfileUseCase {
     @Inject('STORAGE') private readonly storage: IStoragePort,   // para avatar
   ) { }
 
-  async execute(userId: string, dto: UpdateProfileDto, file?: Express.Multer.File) {
+  async execute(userId: string, dto?: UpdateProfileDto, file?: Express.Multer.File) {
+    dto = dto ?? {};     
+    
     const user = await this.users.findById(userId);
     if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user.activeCharacter)
+      throw new BadRequestException('Necesitas un personaje activo');
 
-    /* displayName / locale */
-    if (dto.displayName !== undefined) user.displayName = dto.displayName;
+    /* locale se puede cambiar; displayName lo sincronizamos ↓ */
     if (dto.locale !== undefined) user.locale = dto.locale;
 
-    /* avatar */
+    /* ---------- avatar ---------- */
     if (file) {
+      const newUrl = await this.storage.uploadAvatar(
+        userId, file.buffer, file.mimetype,
+      );
+      const oldUrl =
+        user.activeCharacter.avatarUrl?.startsWith('/static/avatars/')
+          ? user.activeCharacter.avatarUrl
+          : undefined;
 
-      if (!user.activeCharacter) {
-        throw new BadRequestException('Debes tener un personaje activo para subir un avatar.');
+      user.activeCharacter.avatarUrl = newUrl;
+
+      try {
+        await this.users.save(user);
+        if (oldUrl) await this.storage.remove(oldUrl);   // ya guardado → borro
+      } catch (e) {
+        await this.storage.remove(newUrl);              // rollback
+        throw e;
       }
-
-      const url = await this.storage.uploadAvatar(userId, file.buffer, file.mimetype);
-
-
-      user.activeCharacter!.avatarUrl = url;   // asegura relación cargada
-    } else if (dto.avatarUrl) {
-      if (!user.activeCharacter) {
-        throw new BadRequestException('Debes tener un personaje activo para establecer un avatar.');
-      }
-      user.activeCharacter!.avatarUrl = dto.avatarUrl;
+    } else if (dto.avatarUrl !== undefined) {
+      user.activeCharacter.avatarUrl = dto.avatarUrl;
+      await this.users.save(user);
     }
 
-    const saved = await this.users.save(user);
-    return this.users.getPublicProfile(saved.id);   // respuesta consistente
+    /* ---------- displayName sincr. ---------- */
+    user.displayName = user.activeCharacter.name;
+    await this.users.save(user);
+
+    return this.users.getPublicProfile(user.id);
   }
 }

@@ -50,16 +50,31 @@ import { UpdateAnnouncementUseCase } from './application/use-cases/board/update-
 import { DeleteAnnouncementUseCase } from './application/use-cases/board/delete-announcement.use-case';
 import { VotePollUseCase } from './application/use-cases/board/vote-poll.use-case';
 import { GetPollResultsUseCase } from './application/use-cases/board/get-poll-results.use-case';
-import { ScheduleModule } from '@nestjs/schedule'; 
+import { ScheduleModule } from '@nestjs/schedule';
 import { GetAnnouncementDetailQuery } from './application/queries/get-announcement-detail.query';
 import { RemoveVoteUseCase } from './application/use-cases/board/remove-vote.use-case';
 import { CloseExpiredPollsJob } from './application/jobs/close-expired-polls.job';
+import { CreateInternalEventUseCase } from './application/use-cases/events/create-internal-event.use-case';
+import { GuildInternalEvent } from './domain/entities/guild-internal-event.entity';
+import { GuildEventAttendance } from './domain/entities/guild-event-attendance.entity';
+import { ListInternalEventsQuery } from './application/queries/list-internal-events.query';
+import { ConfirmAttendanceUseCase } from './application/use-cases/events/confirm-attendance.use-case';
+import { CancelAttendanceUseCase } from './application/use-cases/events/cancel-attendance.use-case';
+import { ChangeEventStatusUseCase } from './application/use-cases/events/change-event-status.use-case';
+import { ToggleHighlightUseCase } from './application/use-cases/events/toggle-highlight.use-case';
+import { UpdateInternalEventUseCase } from './application/use-cases/events/update-internal-event.use-case';
+import { ListAttendancesQuery } from './application/queries/list-attendances.query';
+import { GetEventDetailQuery } from './application/queries/get-event-detail.query';
+import { CompletePastEventsJob } from './application/jobs/complete-past-events.job';
+import { ExpireInvitesJob } from './application/jobs/expire-invites.job';
 
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Guild, GuildRole, GuildMembership, GuildInvite, GuildAnnouncement, GuildPollOption, GuildVote
+      Guild, GuildRole, GuildMembership, GuildInvite,
+      GuildAnnouncement, GuildPollOption, GuildVote,
+      GuildInternalEvent, GuildEventAttendance,
     ]),
     UsersModule,
     ScheduleModule.forRoot()
@@ -70,7 +85,6 @@ import { CloseExpiredPollsJob } from './application/jobs/close-expired-polls.job
     { provide: 'GUILD_REPO', useClass: GuildRepository },
 
     /* queries */
-
     GetGuildPublicQuery,
     ListGuildsQuery,
     GetGuildInternalQuery,
@@ -79,6 +93,9 @@ import { CloseExpiredPollsJob } from './application/jobs/close-expired-polls.job
     ListMembersQuery,
     ListAnnouncementsQuery,
     GetAnnouncementDetailQuery,
+    ListInternalEventsQuery,
+    ListAttendancesQuery,
+    GetEventDetailQuery,
 
     /* use-cases */
 
@@ -111,17 +128,25 @@ import { CloseExpiredPollsJob } from './application/jobs/close-expired-polls.job
     GetPollResultsUseCase,
     RemoveVoteUseCase,
 
+    // fase 6
+    CreateInternalEventUseCase,
+    UpdateInternalEventUseCase,
+    ConfirmAttendanceUseCase,
+    CancelAttendanceUseCase,
+    ChangeEventStatusUseCase,
+    ToggleHighlightUseCase,
+
     /* Guards */
     GuildMemberGuard,
     GuildPermissionsGuard,
-
+    ExpireInvitesJob,
 
     /* Facade(service) */
     GuildsService,
 
     /* Jobs */
-
-    CloseExpiredPollsJob
+    CloseExpiredPollsJob,
+    CompletePastEventsJob
   ],
   exports: [
     'GUILD_REPO',  // otros dominios (Events, Chat…) lo usarán

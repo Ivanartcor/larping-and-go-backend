@@ -2189,6 +2189,14 @@ Implementar un sistema completo de **roles jerárquicos** dentro de la guild:
 
 
 
+
+
+
+
+
+
+
+
 # Larping & Go · Backend
 
 ## Micro‑dominio Guilds · **Fase 4 – Flujos de membresía**
@@ -2201,43 +2209,43 @@ Versión 2025‑05‑30
 
 Implementar el ciclo de vida completo de los **miembros de hermandad**:
 
-* Solicitud de acceso, invitación directa, invitación por enlace.
-* Aceptación / rechazo / cancelación.
-* Unirse con token público.
-* Expulsión (kick) y salida voluntaria (leave).
-* Mantenimiento consistente de `memberCount` y jerarquía de roles.
+- Solicitud de acceso, invitación directa, invitación por enlace.
+- Aceptación / rechazo / cancelación.
+- Unirse con token público.
+- Expulsión (kick) y salida voluntaria (leave).
+- Mantenimiento consistente de `memberCount` y jerarquía de roles.
 
 ---
 
 ### 1. Entidades y cambios
 
-| Entidad                 | Cambios clave                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **`guild_invites`**     | Relaciones `senderUser`, `targetUser` ahora se cargan en queries.<br>Validaciones por tipo (`invite` / `request`). |
-| **`guild_memberships`** | Nuevo método `findMembershipAny` para reactivar filas *kicked/left* y evitar violar `ux_gm_user_guild`.            |
-| **`guild_roles`**       | Helper `findLowestRole` y creación on‑the‑fly de rol «Miembro» si sólo existe el líder.                            |
+| Entidad                 | Cambios clave                                                                                                  |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **`guild_invites`**     | Relaciones `senderUser`, `targetUser` ahora se cargan en queries.Validaciones por tipo (`invite` / `request`). |
+| **`guild_memberships`** | Nuevo método `findMembershipAny` para reactivar filas *kicked/left* y evitar violar `ux_gm_user_guild`.        |
+| **`guild_roles`**       | Helper `findLowestRole` y creación on‑the‑fly de rol «Miembro» si sólo existe el líder.                        |
 
 ---
 
 ### 2. Repositorio (`GuildRepository`)
 
-* **Invites** `createInvite`, `updateInvite`, `findInviteById`, `findInviteByHash`, `listPendingInvites` (con relaciones).
-* **Memberships** `createMembership`, `updateMembership`, `findMembershipAny`, `listMembers`, `countActiveMembers`.
-* **Roles** `findLowestRole`, `createRole` (uso interno al reactivar miembros).
+- **Invites** `createInvite`, `updateInvite`, `findInviteById`, `findInviteByHash`, `listPendingInvites` (con relaciones).
+- **Memberships** `createMembership`, `updateMembership`, `findMembershipAny`, `listMembers`, `countActiveMembers`.
+- **Roles** `findLowestRole`, `createRole` (uso interno al reactivar miembros).
 
 ---
 
 ### 3. Casos de uso
 
-| UC                | Responsable  | Descripción                                                                                                 |
-| ----------------- | ------------ | ----------------------------------------------------------------------------------------------------------- |
-| `RequestJoinUC`   | Usuario      | Crea `guild_invite` tipo *request* si la guild lo permite.                                                  |
-| `JoinByCodeUC`    | Usuario      | Comprueba `accessCodeHash`, reactiva o crea membership activa.                                              |
-| `SendInviteUC`    | Moderador    | Envía invitación directa (`invite`) o por email. Sólo `MANAGE_MEMBERS`.                                     |
-| `HandleInviteUC`  | Moderador    | Gestiona *request* (`accepted/rejected`) o cancela *invite*.<br>Reactiva/crea membership y ajusta contador. |
-| `RespondInviteUC` | Destinatario | Acepta / rechaza *invite* directa. Reactiva/crea membership.                                                |
-| `KickMemberUC`    | Moderador    | Cambia `status → kicked`, `leftAt`, contador −1.                                                            |
-| `LeaveGuildUC`    | Miembro      | Cambia `status → left`, valida que no sea líder.                                                            |
+| UC                | Responsable  | Descripción                                                                                             |
+| ----------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
+| `RequestJoinUC`   | Usuario      | Crea `guild_invite` tipo *request* si la guild lo permite.                                              |
+| `JoinByCodeUC`    | Usuario      | Comprueba `accessCodeHash`, reactiva o crea membership activa.                                          |
+| `SendInviteUC`    | Moderador    | Envía invitación directa (`invite`) o por email. Sólo `MANAGE_MEMBERS`.                                 |
+| `HandleInviteUC`  | Moderador    | Gestiona *request* (`accepted/rejected`) o cancela *invite*.Reactiva/crea membership y ajusta contador. |
+| `RespondInviteUC` | Destinatario | Acepta / rechaza *invite* directa. Reactiva/crea membership.                                            |
+| `KickMemberUC`    | Moderador    | Cambia `status → kicked`, `leftAt`, contador −1.                                                        |
+| `LeaveGuildUC`    | Miembro      | Cambia `status → left`, valida que no sea líder.                                                        |
 
 ---
 
@@ -2262,12 +2270,12 @@ DELETE /guilds/:id/leave                (member)         # LeaveGuildUC
 
 ### 5. Reglas de negocio
 
-* Índice único `(user_id, guild_id)` se respeta reactivando registros.
-* El **líder** no puede ser expulsado ni abandonar sin transferir liderazgo.
-* `memberCount ≥ 1`; incrementa/decrementa en UCs y se puede reforzar con trigger.
-* Invitación **directa** sólo puede cancelarla el moderador, aceptarla el destinatario.
-* Petición **request** sólo la gestiona el moderador (`accepted/rejected`).
-* En guilds con sólo el rol líder se autogenera «Miembro» posición 1.
+- Índice único `(user_id, guild_id)` se respeta reactivando registros.
+- El **líder** no puede ser expulsado ni abandonar sin transferir liderazgo.
+- `memberCount ≥ 1`; incrementa/decrementa en UCs y se puede reforzar con trigger.
+- Invitación **directa** sólo puede cancelarla el moderador, aceptarla el destinatario.
+- Petición **request** sólo la gestiona el moderador (`accepted/rejected`).
+- En guilds con sólo el rol líder se autogenera «Miembro» posición 1.
 
 ---
 
@@ -2288,9 +2296,9 @@ Tarea horaria marca `status = expired` cuando `now() > expires_at` y `pending`.
 
 ### 8. Pendientes futuros
 
-* Notificación por correo al enviar invitación `email`.
-* Eventos WebSocket para avisos en tiempo real (invitaciones, kicks).
-* Página de ajustes para desactivar solicitudes públicas.
+- Notificación por correo al enviar invitación `email`.
+- Eventos WebSocket para avisos en tiempo real (invitaciones, kicks).
+- Página de ajustes para desactivar solicitudes públicas.
 
 ---
 
@@ -2298,24 +2306,120 @@ Tarea horaria marca `status = expired` cuando `now() > expires_at` y `pending`.
 
 ### 🔬 Casos de prueba exhaustivos
 
-| #  | Escenario                                        | Precondición                                                        | Pasos                                                                                                                              | Resultado esperado                                                  |
-| -- | ------------------------------------------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| 1  | **Solicitud → Aceptada**                         | User *A* no es miembro                                              | 1. A envía `POST /guilds/{id}/requests`<br>2. Moderador *M* (`MANAGE_MEMBERS`) `PATCH /invites/{reqId}` body `{status:'accepted'}` | Invite → `accepted` · Membership `active` para A · `memberCount` +1 |
-| 2  | **Solicitud → Rechazada**                        | Igual a #1                                                          | 1. A envía request<br>2. M `PATCH` `{status:'rejected'}`                                                                           | Invite → `rejected` · Sin membership · `memberCount` sin cambios    |
-| 3  | **Invitación directa → Aceptada**                | A no es miembro                                                     | 1. M `POST /invites` `{targetUserId:A}`<br>2. A `PATCH /invites/{id}/respond` `{accept:true}`                                      | Invite → `accepted` · Membership `active` para A · `memberCount` +1 |
-| 4  | **Invitación directa → Rechazada**               | Igual a #3                                                          | 2. A responde `{accept:false}`                                                                                                     | Invite → `rejected` · `memberCount` sin cambios                     |
-| 5  | **Invitación directa → Cancelada por moderador** | Invitación pendiente                                                | M `PATCH /invites/{id}` `{status:'cancelled'}`                                                                                     | Invite → `cancelled`                                                |
-| 6  | **Link público (TOKEN) → Alta**                  | Guild accessType=`code` · A no es miembro                           | A `POST /join/{token}`                                                                                                             | Membership `active` · `memberCount` +1                              |
-| 7  | **Kick**                                         | A es miembro (rol posición 3), M rol 1                              | M `DELETE /members` body `{memberId:A}`                                                                                            | Membership status `kicked` · `memberCount` -1                       |
-| 8  | **Re‑invitar Kickeado**                          | A status `kicked`                                                   | M re‑invita (#3) → A acepta                                                                                                        | Membership reactivada (misma fila) · `memberCount` +1               |
-| 9  | **Leave**                                        | A rol >0                                                            | A `DELETE /leave`                                                                                                                  | Membership `left` · `memberCount` -1                                |
-| 10 | **Leader cannot leave**                          | L es líder                                                          | L `DELETE /leave`                                                                                                                  | 403 Forbidden                                                       |
-| 11 | **Member cannot kick higher rank**               | B rol pos 2, A rol pos 1                                            | B intenta kick A                                                                                                                   | 403 Forbidden                                                       |
-| 12 | **Moderator cannot accept own invite**           | M envía invite a C, intenta `PATCH accepted`                        | 403 Forbidden (`Sólo cancelar`)                                                                                                    |                                                                     |
-| 13 | **Expired invite**                               | Invite con `expiresAt` < now                                        | Cron marca `expired`                                                                                                               | Token falla con 403                                                 |
-| 14 | **Counter integrity**                            | Comparar `guild.memberCount` con `COUNT(*)` de memberships `active` | Siempre igual (trigger opcional)                                                                                                   |                                                                     |
+| #  | Escenario                                        | Precondición                                                        | Pasos                                                                                                                          | Resultado esperado                                                  |
+| -- | ------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| 1  | **Solicitud → Aceptada**                         | User *A* no es miembro                                              | 1. A envía `POST /guilds/{id}/requests`2. Moderador *M* (`MANAGE_MEMBERS`) `PATCH /invites/{reqId}` body `{status:'accepted'}` | Invite → `accepted` · Membership `active` para A · `memberCount` +1 |
+| 2  | **Solicitud → Rechazada**                        | Igual a #1                                                          | 1. A envía request2. M `PATCH` `{status:'rejected'}`                                                                           | Invite → `rejected` · Sin membership · `memberCount` sin cambios    |
+| 3  | **Invitación directa → Aceptada**                | A no es miembro                                                     | 1. M `POST /invites` `{targetUserId:A}`2. A `PATCH /invites/{id}/respond` `{accept:true}`                                      | Invite → `accepted` · Membership `active` para A · `memberCount` +1 |
+| 4  | **Invitación directa → Rechazada**               | Igual a #3                                                          | 2. A responde `{accept:false}`                                                                                                 | Invite → `rejected` · `memberCount` sin cambios                     |
+| 5  | **Invitación directa → Cancelada por moderador** | Invitación pendiente                                                | M `PATCH /invites/{id}` `{status:'cancelled'}`                                                                                 | Invite → `cancelled`                                                |
+| 6  | **Link público (TOKEN) → Alta**                  | Guild accessType=`code` · A no es miembro                           | A `POST /join/{token}`                                                                                                         | Membership `active` · `memberCount` +1                              |
+| 7  | **Kick**                                         | A es miembro (rol posición 3), M rol 1                              | M `DELETE /members` body `{memberId:A}`                                                                                        | Membership status `kicked` · `memberCount` -1                       |
+| 8  | **Re‑invitar Kickeado**                          | A status `kicked`                                                   | M re‑invita (#3) → A acepta                                                                                                    | Membership reactivada (misma fila) · `memberCount` +1               |
+| 9  | **Leave**                                        | A rol >0                                                            | A `DELETE /leave`                                                                                                              | Membership `left` · `memberCount` -1                                |
+| 10 | **Leader cannot leave**                          | L es líder                                                          | L `DELETE /leave`                                                                                                              | 403 Forbidden                                                       |
+| 11 | **Member cannot kick higher rank**               | B rol pos 2, A rol pos 1                                            | B intenta kick A                                                                                                               | 403 Forbidden                                                       |
+| 12 | **Moderator cannot accept own invite**           | M envía invite a C, intenta `PATCH accepted`                        | 403 Forbidden (`Sólo cancelar`)                                                                                                |                                                                     |
+| 13 | **Expired invite**                               | Invite con `expiresAt` < now                                        | Cron marca `expired`                                                                                                           | Token falla con 403                                                 |
+| 14 | **Counter integrity**                            | Comparar `guild.memberCount` con `COUNT(*)` de memberships `active` | Siempre igual (trigger opcional)                                                                                               |                                                                     |
 
 > **Cobertura**: solicitudes, invitaciones directas, enlaces, re‑ingresos tras kick, privilegios jerárquicos, contador.
+
+
+
+
+
+
+
+
+
+\## Invitaciones – expiración automática (añadido fase 7)
+
+
+
+\### Migración adicional
+
+
+
+\* \*\*Índice parcial\*\* \`ix\_gi\_expires\` en \`guild\_invites (expires\_at)\` para acelerar la búsqueda de invitaciones pendientes que ya caducaron.
+
+\* Archivo: \`1749153600000-IndexInviteExpiry.ts\` con los métodos \`up()\` y \`down()\`.
+
+
+
+\`\`\`sql
+
+CREATE INDEX ix\_gi\_expires
+
+&#x20; ON guild\_invites (expires\_at)
+
+&#x20; WHERE status = 'pending';
+
+\`\`\`
+
+
+
+\### Cron job \`ExpireInvitesJob\`
+
+
+
+\| Parámetro | Valor                                                                         |
+
+\| --------- | ----------------------------------------------------------------------------- |
+
+\| Expresión | \`@Cron('0 \*/60 \* \* \* \*')\` → al inicio de cada hora                            |
+
+\| Acción    | \`expireInvites(now)\`  → pone \`status = 'expired'\` cuando \`expires\_at < now()\` |
+
+\| Log       | \`[ExpireInvitesJob] Invitaciones expiradas automáticamente: \<n>\`              |
+
+
+
+\#### Método de repositorio
+
+
+
+\`expireInvites(cutoff: Date): Promise\<number>\` — devuelve cuántas filas pasó a \`expired\`.
+
+
+
+\`\`\`ts
+
+const { affected } = await this.invites
+
+&#x20; .createQueryBuilder()
+
+&#x20; .update()
+
+&#x20; .set({ status: InviteStatus.EXPIRED })
+
+&#x20; .where('status = \:pending', { pending: InviteStatus.PENDING })
+
+&#x20; .andWhere('expires\_at IS NOT NULL AND expires\_at < \:cut', { cut: cutoff })
+
+&#x20; .execute();
+
+\`\`\`
+
+
+
+\### Flujo completo
+
+
+
+1\. Invitación se crea con \`status = pending\` y \`expiresAt\` opcional.
+
+2\. Al llegar la hora en que el cron corre, se ejecuta la query masiva.
+
+3\. Destinatario o moderador que intente aceptar después recibe \*\*409 · Invitation expired\*\* (lógica ya en fase 4).
+
+4\. No se envían correos ni se purgan invitaciones viejas (puede añadirse más adelante).
+
+
+
+\> \*\*Nota\*\*: este cron job se registró en \`GuildsModule\` y requiere \`ScheduleModule.forRoot()\` en \`AppModule\` (ya hecho en la fase 6).
+
+
 
 
 
@@ -2538,5 +2642,170 @@ Content-Type: application/json
 
 > Con esto se considera **Fase 5 completamente verificada**.
 
+
+
+# Fase 6 · Sistema de **Eventos internos** (Guild Internal Events)
+
+> **Contexto**: los *Internal Events* son actividades organizadas por una hermandad (‐ Guild ‐) y visibles solo para sus miembros.  El objetivo de esta fase fue implementar CRUD, confirmaciones de asistencia, métricas y automatismos asociados.
+
+---
+
+## 1 · Modelo de datos (resumen)
+
+| Tabla                    | Propósito                                               | Campos clave                                                                                        |
+| ------------------------ | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `guild_internal_events`  | Evento.  Estados: `scheduled`, `cancelled`, `completed` | `title`, `description`, `start_at`, `end_at`, `capacity`, `attendee_count`, `status`, `highlighted` |
+| `guild_event_attendance` | Asistencia del usuario                                  | `status (confirm/cancel)`, `changed_at`, FK `user`, `character`                                     |
+
+*Trigger »* mantiene `attendee_count` en `guild_internal_events` al `INSERT` / `UPDATE` de `guild_event_attendance`.
+
+---
+
+## 2 · Permisos
+
+| Acción                                           | Bit | Rol líder | `CREATE_EVENTS` |
+| ------------------------------------------------ | --- | --------- | --------------- |
+| Crear / editar / cancelar / completar / destacar | –   | ✔️        | ✔️              |
+| Confirmar / cancelar asistencia                  | –   | ✔️        | Miembro         |
+| Ver detalles o listado asistencias               | –   | ✔️        | Miembro         |
+
+---
+
+## 3 · Endpoints
+
+| Verbo & Path                                                          | Descripción                     | Body / Query             | Permiso                 |
+| --------------------------------------------------------------------- | ------------------------------- | ------------------------ | ----------------------- |
+| `POST  /guilds/:id/events`                                            | Crear evento                    | `CreateInternalEventDto` | `CREATE_EVENTS` o líder |
+| `PUT   /guilds/:id/events/:eventId`                                   | Editar evento                   | `UpdateInternalEventDto` | idem                    |
+| `PATCH /guilds/:id/events/:eventId/status`                            | `scheduled→cancelled/completed` | `{status}`               | idem                    |
+| `PATCH /guilds/:id/events/:eventId/highlight`                         | Toggle destacado                | –                        | idem                    |
+| `GET   /guilds/:id/events/:eventId`                                   | Detalle + preview asistencias   | –                        | miembro                 |
+| `GET   /guilds/:id/events/:eventId/attendances?filter=confirmed\|all` | Listado asistencias             | –                        | miembro                 |
+| `POST  /guilds/:id/events/:eventId/attendances`                       | Confirmar / cancelar            | `{status}`               | miembro                 |
+
+---
+
+## 4 · Flujos principales
+
+### 4.1 Crear evento
+
+1. **Validación** de fechas (`end_at > start_at`).
+2. `status = scheduled`, `attendee_count = 0`, `highlighted = false`.
+3. Devuelve DTO público con ID generado.
+
+### 4.2 Editar evento
+
+*Solo mientras `status = scheduled`.*
+Restricciones:
+
+* `capacity ≥ attendee_count`.
+* `end_at > start_at`.
+
+### 4.3 Cambiar estado
+
+| De          | A           | Efecto                                                            |
+| ----------- | ----------- | ----------------------------------------------------------------- |
+| `scheduled` | `cancelled` | Se conserva historial; las confirmaciones siguen pero no cuentan. |
+| `scheduled` | `completed` | Marca fin manual sin esperar cron.                                |
+
+### 4.4 Destacado
+
+`PATCH /highlight` invierte `highlighted` para resaltar el evento en la UI.
+
+### 4.5 Confirmar / cancelar asistencia
+
+* **Confirmar** → crea fila si no existe / revive si `cancelled`.
+* **Cancelar**   → cambia `status` y decrementa contador por trigger.
+* Verificación de `capacity` antes de confirmar.
+
+### 4.6 Detalle de evento
+
+Incluye:
+
+* Evento con `creatorUser` + `creatorCharacter` (máscara).
+* `confirmedPreview`: total confirmados y primeras *N* (por defecto *todos* cuando `limit` no se envía).
+
+### 4.7 Cron `CompletePastEventsJob`
+
+* **Frecuencia**: cada 15 min.
+* Acciones:
+
+  * `status = scheduled` **&&** `end_at < now()` (o `start_at < now()` sin `end_at`) → `completed`.
+  * Log + posible notificación WS.
+
+---
+
+## 5 · Ejemplos API
+
+### 5.1 Crear evento
+
+```http
+POST /guilds/43e1/events
+Auth: Bearer <token-mod>
+Content-Type: application/json
+
+{
+  "title"       : "Entrenamiento dominical",
+  "description" : "Sesión de combate ligero",
+  "startAt"     : "2025-06-15T09:00:00Z",
+  "endAt"       : "2025-06-15T12:00:00Z",
+  "capacity"    : 30
+}
+```
+
+Resp → `201 Created` body con entidad.
+
+### 5.2 Editar (cambiar aforo)
+
+```http
+PUT /guilds/43e1/events/3c0b
+{ "capacity": 40 }
+```
+
+### 5.3 Cancelar evento
+
+```bash
+curl -X PATCH -H "Auth: Bearer $TK_LEADER" \
+     -d '{"status":"cancelled"}' \
+     http://localhost:3000/guilds/43e1/events/3c0b/status
+```
+
+### 5.4 Confirmar asistencia
+
+```http
+POST /guilds/43e1/events/3c0b/attendances
+Auth: Bearer <token-member>
+{ "status": "confirmed" }
+```
+
+### 5.5 Detalle
+
+```http
+GET /guilds/43e1/events/3c0b
+```
+
+Respuesta → ver sección 8.
+
+---
+
+## 6 · Errores comunes
+
+| HTTP code | Motivo                                                |
+| --------- | ----------------------------------------------------- |
+| 403       | Falta bit `CREATE_EVENTS` o no es líder               |
+| 400       | `capacity < attendee_count` · fechas inconsistentes   |
+| 409       | Intento de confirmar asistencia excediendo `capacity` |
+
+---
+
+## 7 · Próximos pasos
+
+* **WS/Notifications** a asistentes cuando estado cambie o se cancele.
+* Paginación en listado asistencias si supera 100.
+* Exportar CSV de asistentes para organizadores.
+
+---
+
+> **Revisión 05 Jun 2025** — incluye endpoints finales, cron en producción y ejemplos de uso Postman/curl.
 
 

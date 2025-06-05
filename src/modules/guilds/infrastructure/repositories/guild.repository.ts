@@ -18,6 +18,9 @@ import { GuildInvite, InviteStatus } from '../../domain/entities/guild-invite.en
 import { AnnouncementType, GuildAnnouncement } from '../../domain/entities/guild-announcement.entity';
 import { GuildPollOption } from '../../domain/entities/guild-poll-option.entity';
 import { GuildVote } from '../../domain/entities/guild-vote.entity';
+import { EventStatus, GuildInternalEvent } from '../../domain/entities/guild-internal-event.entity';
+import { AttendanceStatus, GuildEventAttendance } from '../../domain/entities/guild-event-attendance.entity';
+import { ListEventsFilter } from '../../application/ports/i-list-events-filter.repository';
 
 @Injectable()
 export class GuildRepository implements IGuildRepository {
@@ -29,6 +32,8 @@ export class GuildRepository implements IGuildRepository {
     @InjectRepository(GuildAnnouncement) private readonly ann: Repository<GuildAnnouncement>,
     @InjectRepository(GuildPollOption) private readonly opts: Repository<GuildPollOption>,
     @InjectRepository(GuildVote) private readonly votes: Repository<GuildVote>,
+    @InjectRepository(GuildInternalEvent) private readonly events: Repository<GuildInternalEvent>,
+    @InjectRepository(GuildEventAttendance) private readonly attendances: Repository<GuildEventAttendance>,
     private readonly ds: DataSource,
   ) { }
 
@@ -398,6 +403,171 @@ export class GuildRepository implements IGuildRepository {
   closePoll(id: string) {
     return this.ann.update(id, { isClosed: true })
       .then(() => undefined);
+  }
+
+  /* -------- Crear evento ------------------------------------ */
+  async createInternalEvent(ev: GuildInternalEvent) {
+    /** usamos transacción por coherencia futura */
+    return this.ds.transaction(async (manager) => {
+      const saved = await manager.save(GuildInternalEvent, ev);
+      return saved;
+    });
+  }
+
+  /* -------- Guardar cambios --------------------------------- */
+  saveInternalEvent(ev: GuildInternalEvent) {
+    return this.events.save(ev);   // simple persist
+  }
+
+
+  async listInternalEvents(
+    guildId: string,
+    { type, page, perPage }: ListEventsFilter,
+  ) {
+    const qb = this.events.createQueryBuilder('e')
+      .where('e.guild_id = :gid', { gid: guildId });
+
+    /** filtro TIME / highlighted */
+    if (type === 'upcoming') {
+      qb.andWhere('e.status = :sch', { sch: 'scheduled' })
+        .andWhere('e.startAt >= NOW()')
+        .orderBy('e.startAt', 'ASC');
+    }
+    else if (type === 'past') {
+      qb.andWhere('e.endAt < NOW()')
+        .orderBy('e.startAt', 'DESC');
+    }
+    else if (type === 'highlighted') {
+      qb.andWhere('e.highlighted = TRUE')
+        .andWhere('e.status = :sch', { sch: 'scheduled' })
+        .orderBy('e.startAt', 'ASC');
+    }
+    else { /* all */
+      qb.orderBy('e.startAt', 'DESC');  // o ASC, como prefieras
+    }
+
+    const total = await qb.getCount();
+
+    const items = await qb
+      .skip((page - 1) * perPage)
+      .take(perPage)
+      .leftJoinAndSelect('e.creatorUser', 'u')
+      .getMany();
+
+    return { items, total };
+  }
+
+
+  async findInternalEvent(id: string) {
+    return this.events.findOne({ where: { id }, relations: { guild: true } });
+  }
+
+  findAttendance(eventId: string, userId: string) {
+    return this.attendances.findOne({
+      where: { event: { id: eventId }, user: { id: userId } },
+    });
+  }
+
+  async listAttendances(eventId: string, confirmedOnly: boolean) {
+    const qb = this.attendances.createQueryBuilder('a')
+      .leftJoinAndSelect('a.user', 'u')
+      .leftJoinAndSelect('a.character', 'c')
+      .where('a.event_id = :ev', { ev: eventId });
+
+    if (confirmedOnly)
+      qb.andWhere('a.status = :s', { s: 'confirmed' });
+
+    // Orden: primero confirmados, luego cancelados, y por fecha asc
+    qb.orderBy('a.status', 'ASC')
+      .addOrderBy('a.changed_at', 'ASC');
+
+    return qb.getMany();
+  }
+
+
+  createAttendance(a: GuildEventAttendance) {
+    return this.attendances.save(a);
+  }
+
+  saveAttendance(a: GuildEventAttendance) {
+    return this.attendances.save(a);
+  }
+
+  countConfirmed(eventId: string) {
+    return this.attendances.count({
+      where: { event: { id: eventId }, status: AttendanceStatus.CONFIRMED },
+    });
+  }
+
+  async findEventWithCreator(id: string) {
+    return this.events.findOne({
+      where: { id },
+      relations: {
+        creatorUser: true,
+        creatorCharacter: true,
+        guild: true,
+      },
+    });
+  }
+
+  async sampleConfirmed(eventId: string, limit?: number) {
+    const qb = this.attendances.createQueryBuilder('a')
+      .leftJoinAndSelect('a.user', 'u')
+      .leftJoinAndSelect('a.character', 'c')
+      .where('a.event_id = :id', { id: eventId })
+      .andWhere('a.status = :st', { st: 'confirmed' })
+      .orderBy('a.changed_at', 'ASC');
+
+
+    qb.select([
+      'u.id           AS "userId"',
+      'u.username     AS "username"',
+      'c.id           AS "charId"',
+      'c.name         AS "charName"',
+      'c.avatar_url   AS "charAvatar"',
+    ]);
+
+    if (limit && limit > 0) qb.limit(limit);   // ⚠️ sólo si hay límite > 0
+
+    return qb.getRawMany();
+  }
+
+
+  async completePastEvents(cutoff: Date) {
+    const { affected } = await this.events
+      .createQueryBuilder()
+      .update()
+      .set({ status: EventStatus.COMPLETED })
+      .where('status = :s', { s: EventStatus.SCHEDULED })
+      .andWhere(`
+      (end_at IS NOT NULL AND end_at < :cut)
+      OR (end_at IS NULL AND start_at < :cut)
+    `, { cut: cutoff })
+      .execute();
+
+    return affected ?? 0;
+  }
+
+  /* ids recién cerrados (para notificaciones WebSocket, opcional) */
+  findJustCompleted(cutoff: Date) {
+    return this.events.createQueryBuilder('e')
+      .select('e.id')
+      .where('e.status = :completed', { completed: EventStatus.COMPLETED })
+      .andWhere('e.updated_at >= :cut', { cut: cutoff })
+      .getRawMany()
+      .then(rows => rows.map(r => r.id as string));
+  }
+
+  async expireInvites(cutoff: Date) {
+    const { affected } = await this.invites
+      .createQueryBuilder()
+      .update()
+      .set({ status: InviteStatus.EXPIRED })
+      .where('status = :pending', { pending: InviteStatus.PENDING })
+      .andWhere('expires_at IS NOT NULL AND expires_at < :cut', { cut: cutoff })
+      .execute();
+
+    return affected ?? 0;
   }
 
 }

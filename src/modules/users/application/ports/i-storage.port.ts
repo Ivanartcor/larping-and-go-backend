@@ -7,4 +7,15 @@ export interface IStoragePort {
   /** Sube un buffer y devuelve la URL pública */
   uploadAvatar(userId: string, buffer: Buffer, filename: string): Promise<string>;
   /** (futuro) remove(key) para limpieza */
+
+    uploadGuildAsset(
+    guildId: string,
+    kind: 'emblem' | 'role-icon',
+    buffer: Buffer,
+    mime: string,
+  ): Promise<string>;
+
+    /* ---------- Utilidad genérica ---------- */
+  /** Elimina un archivo dado su URL pública (ignora si no existe). */
+  remove(url: string): Promise<void>;
 }

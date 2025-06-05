@@ -3,21 +3,25 @@ import {
   Injectable, Inject, ConflictException, ForbiddenException,
 } from '@nestjs/common';
 import { IGuildRepository } from '../../ports/i-guild.repository';
-import { CreateRoleDto } from '../../../domain/dto/role/create-role';    
-import { GuildRole }        from '../../../domain/entities/guild-role.entity';
-import { GuildPermission }  from '../../../domain/entities/guild-role.entity';
+import { CreateRoleDto } from '../../../domain/dto/role/create-role';
+import { GuildRole } from '../../../domain/entities/guild-role.entity';
+import { GuildPermission } from '../../../domain/entities/guild-role.entity';
+import { IStoragePort } from 'src/modules/users/application/ports/i-storage.port';
 
 @Injectable()
 export class CreateRoleUseCase {
   constructor(
     @Inject('GUILD_REPO') private readonly guilds: IGuildRepository,
-  ) {}
+    @Inject('STORAGE') private readonly storage: IStoragePort,
+
+  ) { }
 
   async execute(
     guildId: string,
     dto: CreateRoleDto,
     currentPos: number,
     perms: number,
+    iconFile?: Express.Multer.File,
   ): Promise<GuildRole> {
 
     if ((perms & GuildPermission.CREATE_ROLES) === 0) {
@@ -38,13 +42,21 @@ export class CreateRoleUseCase {
     }
 
     const role = new GuildRole();
-    role.guild       = { id: guildId } as any;
-    role.name        = dto.name;
-    role.color       = dto.color;
-    role.icon        = dto.icon;
-    role.position    = dto.position;
+    role.guild = { id: guildId } as any;
+    role.name = dto.name;
+    role.color = dto.color;
+    //role.icon        = dto.icon;
+    role.position = dto.position;
     role.permissions = dto.permissions;
-    role.isLeader    = false;
+    role.isLeader = false;
+
+    if (iconFile) {
+      role.icon = await this.storage.uploadGuildAsset(
+        guildId, 'role-icon', iconFile.buffer, iconFile.mimetype,
+      );
+    } else if (dto.icon) {
+      role.icon = dto.icon;          // URL o nombre-icon lib
+    }
 
     return this.guilds.createRole(role);
   }

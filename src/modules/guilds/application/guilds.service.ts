@@ -38,6 +38,19 @@ import { GetAnnouncementDetailQuery } from './queries/get-announcement-detail.qu
 import { GuildMembership } from '../domain/entities/guild-membership.entity';
 import { CreateAnnouncementDto } from '../domain/dto/announcements/create-announcement.dto';
 import { RemoveVoteUseCase } from './use-cases/board/remove-vote.use-case';
+import { CreateInternalEventUseCase } from './use-cases/events/create-internal-event.use-case';
+import { CreateInternalEventDto } from '../domain/dto/events/create-internal-event.dto';
+import { ListInternalEventsQuery } from './queries/list-internal-events.query';
+import { CancelAttendanceUseCase } from './use-cases/events/cancel-attendance.use-case';
+import { ConfirmAttendanceUseCase } from './use-cases/events/confirm-attendance.use-case';
+import { AttendanceDto } from '../domain/dto/events/attendance.dto';
+import { ChangeEventStatusUseCase } from './use-cases/events/change-event-status.use-case';
+import { ToggleHighlightUseCase } from './use-cases/events/toggle-highlight.use-case';
+import { ChangeStatusDto } from '../domain/dto/events/change-status.dto';
+import { UpdateInternalEventUseCase } from './use-cases/events/update-internal-event.use-case';
+import { UpdateInternalEventDto } from '../domain/dto/events/update-internal-event.dto';
+import { ListAttendancesQuery } from './queries/list-attendances.query';
+import { GetEventDetailQuery } from './queries/get-event-detail.query';
 
 
 
@@ -50,7 +63,11 @@ export class GuildsService {
     private readonly getInternalQ: GetGuildInternalQuery,
     private readonly listMemQ: ListMembersQuery,
     private readonly listInvQ: ListPendingInvitesQuery,
+    private readonly getAnnDetailQ: GetAnnouncementDetailQuery,
     private readonly listAnnQ: ListAnnouncementsQuery,
+    private readonly listEventsQ: ListInternalEventsQuery,
+    private readonly listAttQ: ListAttendancesQuery,
+    private readonly eventDetailQ: GetEventDetailQuery,
 
     private readonly createUC: CreateGuildUseCase,
     private readonly updateUC: UpdateGuildUseCase,
@@ -73,8 +90,14 @@ export class GuildsService {
     private readonly delAnnUC: DeleteAnnouncementUseCase,
     private readonly voteUC: VotePollUseCase,
     private readonly getResultsUC: GetPollResultsUseCase,
-    private readonly getAnnDetailQ: GetAnnouncementDetailQuery,
     private readonly unvoteUC: RemoveVoteUseCase,
+    private readonly createEventUC: CreateInternalEventUseCase,
+    private readonly confirmAttUC: ConfirmAttendanceUseCase,
+    private readonly cancelAttUC: CancelAttendanceUseCase,
+    private readonly changeStatusUC: ChangeEventStatusUseCase,
+    private readonly toggleHighUC: ToggleHighlightUseCase,
+    private readonly updateEventUC: UpdateInternalEventUseCase,
+
   ) { }
 
   create(userId: string, dto: CreateGuildDto) {
@@ -89,12 +112,13 @@ export class GuildsService {
     return this.listQ.execute(search);
   }
 
-  update(userId: string, guildId: string, dto: UpdateGuildDto, membership) {
+  update(userId: string, guildId: string, dto: UpdateGuildDto, membership, emblem?: Express.Multer.File,) {
     return this.updateUC.execute(
       guildId,
       dto,
       membership.role.permissions,
       membership.role.isLeader,
+      emblem
     ).then(() => this.getInternalQ.execute(guildId));
   }
 
@@ -112,22 +136,24 @@ export class GuildsService {
     return this.listRolesQ.execute(guildId);
   }
 
-  createRole(guildId: string, dto: CreateRoleDto, membership) {
+  createRole(guildId: string, dto: CreateRoleDto, membership, file) {
     return this.createRoleUC.execute(
       guildId,
       dto,
       membership.role.position,
       membership.role.permissions,
+      file,
     );
   }
 
-  updateRole(guildId: string, roleId: string, dto: UpdateRoleDto, membership) {
+  updateRole(guildId: string, roleId: string, dto: UpdateRoleDto, membership, file) {
     return this.updateRoleUC.execute(
       guildId,
       roleId,
       dto,
       membership.role.position,
       membership.role.permissions,
+      file,
     );
   }
 
@@ -208,25 +234,25 @@ export class GuildsService {
 
 
   /*boards / polls */
- createAnnouncement(
-  guildId: string,
-  dto: CreateAnnouncementDto,
-  member: GuildMembership,   // ← ahora es el 3er parámetro
-  userId:  string,
-) {
-  const authorCharId =
-    member.role.isLeader
-      ? member.guild.leader?.activeCharacter?.id
-      : member.user.activeCharacter?.id;
+  createAnnouncement(
+    guildId: string,
+    dto: CreateAnnouncementDto,
+    member: GuildMembership,   // ← ahora es el 3er parámetro
+    userId: string,
+  ) {
+    const authorCharId =
+      member.role.isLeader
+        ? member.guild.leader?.activeCharacter?.id
+        : member.user.activeCharacter?.id;
 
-  return this.createAnnUC.execute(
-    guildId,
-    dto,
-    userId,
-    authorCharId,
-    member.role.permissions,   // ← ya no será undefined
-  );
-}
+    return this.createAnnUC.execute(
+      guildId,
+      dto,
+      userId,
+      authorCharId,
+      member.role.permissions,   // ← ya no será undefined
+    );
+  }
   updateAnnouncement(gId: string, annId: string, dto, member) {
     return this.updateAnnUC.execute(gId, annId, dto,
       member.user.id, member.role.permissions);
@@ -241,26 +267,89 @@ export class GuildsService {
   }
 
   removeVote(gId: string, aId: string, oId: string, userId: string) {
-  return this.unvoteUC.execute(gId, aId, oId, userId);
-}
+    return this.unvoteUC.execute(gId, aId, oId, userId);
+  }
 
 
   listAnnouncements(guildId: string, page = 1, perPage = 20) {
     return this.listAnnQ.execute(guildId, page, perPage);
   }
 
-  // guilds.service.ts
-getAnnouncement(gId: string, annId: string, membership) {
-  return this.getAnnDetailQ.execute(
-    gId, annId, membership.user.id, membership.role.permissions,
-  );
-}
 
-  
-getPollResults(gId: string, annId: string, m) {
-  return this.getResultsUC.execute(
-    gId, annId, m.user.id, m.role.permissions,
-  );
-}
+  getAnnouncement(gId: string, annId: string, membership) {
+    return this.getAnnDetailQ.execute(
+      gId, annId, membership.user.id, membership.role.permissions,
+    );
+  }
+
+
+  getPollResults(gId: string, annId: string, m) {
+    return this.getResultsUC.execute(
+      gId, annId, m.user.id, m.role.permissions,
+    );
+  }
+
+  /* ---- crear evento interno ---- */
+  createInternalEvent(guildId: string, dto: CreateInternalEventDto, userId: string, characterId: string | undefined, rolePerms: number) {
+    return this.createEventUC.execute(
+      guildId, dto, userId, characterId, rolePerms,
+    );
+  }
+
+  listInternalEvents(guildId: string, filter: string, page: string) {
+    return this.listEventsQ.execute(guildId, filter, page);
+  }
+
+  confirmAttendance(guildId: string, eventId: string, dto: AttendanceDto, userId: string) {
+    return this.confirmAttUC.execute(guildId, eventId, userId, dto);
+  }
+
+  cancelAttendance(guildId: string, eventId: string, userId: string) {
+    return this.cancelAttUC.execute(guildId, eventId, userId);
+  }
+
+  listEventAttendances(guildId: string, eventId: string, filter: string) {
+    return this.listAttQ.execute(guildId, eventId, filter);
+  }
+
+  changeEventStatus(guildId: string, eventId: string, dto: ChangeStatusDto, membership) {
+    return this.changeStatusUC.execute(
+      guildId, eventId, dto.status, membership.role.permissions, membership.role.isLeader
+    );
+  }
+
+  toggleHighlight(
+    guildId: string,
+    eventId: string,
+    membership,
+  ) {
+    return this.toggleHighUC.execute(
+      guildId,
+      eventId,
+      membership.role.permissions,
+      membership.role.isLeader,
+    );
+  }
+
+  updateInternalEvent(
+    guildId: string,
+    eventId: string,
+    dto: UpdateInternalEventDto,
+    membership,
+  ) {
+    return this.updateEventUC.execute(
+      guildId,
+      eventId,
+      dto,
+      membership.role.permissions,
+      membership.role.isLeader,
+    );
+  }
+
+  getEventDetail(guildId: string, eventId: string) {
+    return this.eventDetailQ.execute(guildId, eventId);
+  }
+
+
 
 }

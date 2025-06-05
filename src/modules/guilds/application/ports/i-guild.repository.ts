@@ -6,6 +6,9 @@ import { GuildInvite } from '../../domain/entities/guild-invite.entity';
 import { GuildAnnouncement } from '../../domain/entities/guild-announcement.entity';
 import { GuildPollOption } from '../../domain/entities/guild-poll-option.entity';
 import { GuildVote } from '../../domain/entities/guild-vote.entity';
+import { GuildInternalEvent } from '../../domain/entities/guild-internal-event.entity';
+import { ListEventsFilter } from './i-list-events-filter.repository';
+import { GuildEventAttendance } from '../../domain/entities/guild-event-attendance.entity';
 
 export interface IGuildRepository {
   /** Lectura */
@@ -90,7 +93,6 @@ export interface IGuildRepository {
   countVotesByOption(announcementId: string): Promise<number>;
 
 
-
   countAnnouncements(guildId: string): Promise<number>;
 
   findAnnouncementWithOptions(annId: string): Promise<GuildAnnouncement | null>;
@@ -98,4 +100,37 @@ export interface IGuildRepository {
   findExpiredOpenPolls(now: Date): Promise<GuildAnnouncement[]>;
   closePoll(id: string): Promise<void>;
 
+  /** Inserta un evento, devuelve entidad con PK */
+  createInternalEvent(ev: GuildInternalEvent): Promise<GuildInternalEvent>;
+
+  /** Persiste cambios sobre un evento existente */
+  saveInternalEvent(ev: GuildInternalEvent): Promise<GuildInternalEvent>;
+
+  findInternalEvent(id: string): Promise<GuildInternalEvent | null>;
+
+  listInternalEvents(
+    guildId: string,
+    filter: ListEventsFilter,
+  ): Promise<{ items: GuildInternalEvent[]; total: number }>;
+
+  findAttendance(eventId: string, userId: string): Promise<GuildEventAttendance | null>;
+  listAttendances(eventId: string, confirmedOnly: boolean): Promise<GuildEventAttendance[]>;
+
+  createAttendance(a: GuildEventAttendance): Promise<GuildEventAttendance>;
+  saveAttendance(a: GuildEventAttendance): Promise<GuildEventAttendance>;
+
+  countConfirmed(eventId: string): Promise<number>;
+
+  findEventWithCreator(eventId: string): Promise<GuildInternalEvent | null>;
+  sampleConfirmed(eventId: string, limit?: number): Promise<{ userId: string; username: string; charId?: string; charName?: string; charAvatar?: string; }[]>;
+
+  // nº eventos cerrados
+  completePastEvents(cutoff: Date): Promise<number>;
+  // ids de eventos recién cerrados  
+  findJustCompleted(cutoff: Date): Promise<string[]>;
+
+
+  /** Marca como expired todas las pending con expires_at < cutoff.  
+ *  Devuelve cuántas filas actualizó. */
+  expireInvites(cutoff: Date): Promise<number>;
 }
