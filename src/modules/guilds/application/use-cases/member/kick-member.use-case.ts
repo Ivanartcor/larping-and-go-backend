@@ -6,11 +6,14 @@ import { IGuildRepository } from '../../ports/i-guild.repository';
 import { KickMemberDto } from 'src/modules/guilds/domain/dto/invites/kick-member.dto';
 import { MembershipStatus } from '../../../domain/entities/guild-membership.entity';
 import { GuildPermission } from '../../../domain/entities/guild-role.entity';
+import { IChatRepository } from 'src/modules/chat/application/ports/i-chat.repository';
 
 @Injectable()
 export class KickMemberUseCase {
     constructor(
         @Inject('GUILD_REPO') private readonly guilds: IGuildRepository,
+        @Inject('CHAT_REPO') private readonly chats: IChatRepository,
+
     ) { }
 
     async execute(
@@ -36,6 +39,13 @@ export class KickMemberUseCase {
 
         m.status = MembershipStatus.KICKED;
         m.leftAt = new Date();
+
+        /* marcar LEFT sólo en sub-canales auto_sync = true */
+        const subChannels = await this.chats.listGuildSubchannels(guildId, true); // true→autoSync
+        for (const c of subChannels) {
+            await this.chats.leaveChannel(c.id, m.user.id);
+        }
+
         await this.guilds.updateMembership(m);
 
         const guild = m.guild;

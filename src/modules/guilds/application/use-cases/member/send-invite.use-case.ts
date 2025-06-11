@@ -9,11 +9,13 @@ import {
 } from '../../../domain/entities/guild-invite.entity';
 import { GuildPermission }  from '../../../domain/entities/guild-role.entity';
 import { addHours }         from 'date-fns';
+import { IChatRepository } from 'src/modules/chat/application/ports/i-chat.repository';
 
 @Injectable()
 export class SendInviteUseCase {
   constructor(
     @Inject('GUILD_REPO') private readonly guilds: IGuildRepository,
+    @Inject('CHAT_REPO') private readonly chats: IChatRepository
   ) {}
 
   async execute(

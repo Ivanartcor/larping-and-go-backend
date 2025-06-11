@@ -8,14 +8,22 @@ export interface IStoragePort {
   uploadAvatar(userId: string, buffer: Buffer, filename: string): Promise<string>;
   /** (futuro) remove(key) para limpieza */
 
-    uploadGuildAsset(
+  uploadGuildAsset(
     guildId: string,
     kind: 'emblem' | 'role-icon',
     buffer: Buffer,
     mime: string,
   ): Promise<string>;
 
-    /* ---------- Utilidad genérica ---------- */
+  /* ---------- Utilidad genérica ---------- */
   /** Elimina un archivo dado su URL pública (ignora si no existe). */
   remove(url: string): Promise<void>;
+
+  uploadChatAttachment(
+    userId: string,
+    buffer: Buffer,
+    mime: string,
+    original: string,
+  ): Promise<{ id: string; url: string; size: number }>;
+
 }

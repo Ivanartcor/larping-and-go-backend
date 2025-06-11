@@ -101,121 +101,6 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
 
 
-## ¿Qué contendrá cada carpeta?
-
-### auth/
-
-- Servicios de login, registro, recuperación de contraseñas.
-
-- Guards JWT (JwtAuthGuard, RolesGuard).
-
-- Estrategias Passport (JwtStrategy).
-
-### users/
-
-- Datos de usuario (email, configuración privada).
-
-- Perfil público basado en personaje activo.
-
-- Control de privacidad.
-
-### characters/
-
-- CRUD de personajes.
-
-- Selección de personaje activo.
-
-- Definición de características personalizadas.
-
-### guilds/
-
-- Crear, gestionar hermandades.
-
-- Roles personalizados.
-
-- Aceptar, invitar, expulsar miembros.
-
-- Acceso a info de miembros.
-
-### Submódulos dentro de guilds/:
-
-#### roles/ → Gestión de roles y permisos.
-
-#### announcements/ → Tablón de anuncios y votaciones internas.
-
-### events/
-- Eventos internos de hermandades.
-
-- Eventos globales abiertos a toda la comunidad.
-
-### messaging/
-- Mensajes privados entre usuarios (chat 1-1).
-
-- Chat grupal de hermandad en tiempo real.
-
-### notifications/ (futuro)
-- Notificaciones internas tipo:
-
-- Mensaje nuevo.
-
-- Invitación a hermandad.
-
-- Evento próximo.
-
-### follows/ (futuro)
-- Sistema de seguimiento de usuarios.
-
-- Seguimiento del muro público de personajes.
-
-### posts/ (futuro)
-- Publicaciones del personaje activo en su muro.
-
-- Menciones, reacciones, compartidos.
-
-### search/
-APIs para buscar:
-
-- Usuarios
-
-- Hermandades
-
-- Eventos
-
-- Personajes activos
-
-### uploads/
-- APIs para subir imágenes.
-
-- Gestión de avatar de personajes, banners de eventos, etc.
-
-### common/
-- Pipes de validación
-
-- Decoradores de roles, usuarios
-
-- Excepciones personalizadas
-
-- Interceptors para respuestas uniformes
-
-### config/
-- config.module.ts para cargar .env
-
-- Configs para base de datos, JWT, etc.
-
-### database/
-- Entidades TypeORM (user.entity.ts, character.entity.ts, etc.)
-
-- Migraciones (opcional en producción)
-
-### gateway/
-- WebSocket Gateway para chats y notificaciones
-
-- Configuración de canales/salas
-
-
-
-
-# estructura v2
 
 modules/ con triple capa (domain / application / infrastructure):
 Aplica DDD / Onion sin sobre‑ingeniería: las entidades viven en domain, los casos de uso en application y los adaptadores externos (repos, sockets, providers) en infrastructure.
@@ -2807,5 +2692,300 @@ Respuesta → ver sección 8.
 ---
 
 > **Revisión 05 Jun 2025** — incluye endpoints finales, cron en producción y ejemplos de uso Postman/curl.
+
+
+
+
+
+# Micro‑dominio **Chat** · Versión 2025‑06‑12
+
+---
+
+## 🎯 Visión
+
+Proveer mensajería **1‑a‑1** y **grupal de hermandad** en tiempo real con identidad de personaje activo, historial persistente, adjuntos, contadores *unread*, presencia, sub‑canales y control de inundación.
+
+---
+
+## 1 · Modelo de datos (PostgreSQL)
+
+| Tabla                | Propósito                                                         | Campos clave                                                                              |
+| -------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `chat_channels`      | Canal ( `direct` / `guild` ) + sub‑canales (`parent_channel_id`)  | `type`, `guild_id`, `direct_hash`, `topic`, `auto_sync`, `last_message_at`, `is_archived` |
+| `chat_participants`  | Participación de usuario                                          | `role` (*member/moderator*), `status` (*active/left*), `joined_at`, `left_at`             |
+| `chat_messages`      | Mensajes (texto, media, sistema)                                  | `type`, `content`, `reply_to_id`, `edited_at`, `is_deleted`                               |
+| `chat_attachments`   | Metadatos de archivos                                             | `file_url`, `file_name`, `content_type`, `size_bytes` + dimensiones                       |
+| `chat_message_reads` | Marca de lectura                                                  | PK `(message_id,user_id)`, `read_at`                                                      |
+
+---
+
+## 2 · Permisos y jerarquía
+
+* **Participante** activo puede enviar/leer.
+* **Moderator** (campo `role` en `chat_participants`) puede editar/borrar mensajes ajenos y gestionar expulsiones.
+* En canales `guild`, miembros con bit `MANAGE_MEMBERS` se consideran moderadores implícitos.
+
+---
+
+## 3 · Lógica de negocio
+
+### 3.1 Envío de mensaje
+
+1. Verificar participación activa.
+2. Validar ventana anti‑spam (20 msgs / 10 s).
+3. Insertar mensaje (+ adjuntos) → trigger actualiza `last_message_at`.
+4. Broadcast WS `message:new`; actualizar contadores *unread*.
+
+### 3.2 Lecturas
+
+* `message:read` marca fila en `chat_message_reads`; genera `message:read:ack` y pone contador a 0.
+
+### 3.3 Edición / borrado
+
+* **Autor** puede editar/borrar en ≤ 120 s.
+* **Moderador** puede siempre.
+* Soft‑delete (`is_deleted = true`).
+
+### 3.4 Sub‑canales de guild
+
+* `autoSync=true` (defecto) → nuevos miembros se añaden; expulsados se quitan.
+* Límite 30 sub‑canales/guild.
+
+### 3.5 Presencia & Typing
+
+* Servicio in‑memory registra sockets ⇄ users.
+* Eventos WS `presence:online/offline`, `typing:start/stop` (timeout 4 s).
+
+### 3.6 Rate‑limit
+
+* REST global 50 req/min (`@nestjs/throttler`).
+* WS guard 20 eventos/10 s por canal/usuario – excepción `error:rate`.
+* Use‑case envío replica verificación.
+
+### 3.7 Cron jobs
+
+| Job                      | Freq      | Acción                                                |
+| ------------------------ | --------- | ----------------------------------------------------- |
+| `prune-chat-attachments` | cada hora | Borra adjuntos sin mensaje (>1 h) y archivos físicos. |
+
+---
+
+## 4 · Endpoints REST clave
+
+| Método & Path                                   | Descripción                          |
+| ----------------------------------------------- | ------------------------------------ |
+| **GET /chat/channels**                          | Lista canales + `unread` (paginado). |
+| **GET /chat/channels/****:id****/messages**     | Historial (lazy scroll).             |
+| **POST /chat/channels/****:id****/messages**    | Envía mensaje TEXT/MEDIA.            |
+| **POST /chat/attachments**                      | Sube archivo, devuelve `fileId`.     |
+| **PATCH /chat/messages/\*\*\*\*:id**            | Edita (autor ≤120 s o moderator).    |
+| **DELETE /chat/messages/\*\*\*\*:id**           | Soft‑delete.                         |
+| **GET /chat/channels/****:id****/unread**       | Contador no leídos.                  |
+| **GET /chat/unread-summary**                    | Array `{channelId, unread}`.         |
+| **GET /chat/channels/****:id****/participants** | Lista activos.                       |
+| **POST /guilds/****:gid****/chat-channels**     | Crea sub‑canal `{topic,autoSync}`.   |
+
+---
+
+## 5 · WebSocket API (`/chat` namespace)
+
+| Evento cliente → servidor         | Payload                    | Respuesta / Broadcast                                                     |
+| --------------------------------- | -------------------------- | ------------------------------------------------------------------------- |
+| `channels:list`                   | `{page,perPage}`           | `channels:list` array summaries                                           |
+| `channel:join` / `channel:leave`  | `{channelId}`              | `channel:join:ack` · broadcast `channel:joined/left` + `presence` updates |
+| `messages:list`                   | `{channelId,limit,before}` | list of messages                                                          |
+| `message:send`                    | `{channelId,…dto}`         | broadcast `message:new` + badge updates                                   |
+| `message:edit` / `message:delete` | ids                        | broadcast `message:edited/deleted`                                        |
+| `message:read`                    | `{messageId,channelId}`    | `message:read:ack` & badge 0                                              |
+| `typing:start` / `typing:stop`    | `{channelId}`              | broadcast typing events                                                   |
+| `presence:online/offline`         | auto                       | –                                                                         |
+
+---
+
+## 6 · Rate‑limit, seguridad y guards
+
+* `JwtAuthGuard` (REST) · `JwtWsGuard` (WS).
+* `WsThrottleGuard` (per‑socket).
+* `ChatParticipantGuard` protege REST de mensajes/lecturas.
+
+---
+
+## 7 · Cron & mantenimiento
+
+* **ExpireInvitesJob** (Guilds) – pero afecta auto‑sync sub‑canales.
+* **PruneAttachmentsJob** – limpia adjuntos huérfanos.
+
+---
+
+## 8 · Flujos resumidos
+
+1. **Direct**: `getOrCreateDirectChannel` garantiza 1 canal/user‑pair.
+2. **Guild default** creado por trigger; sub‑canales via endpoint.
+3. Adjuntos → subir (`fileId`) → incluir en mensaje.
+4. Presencia actualiza listas online + typing.
+
+---
+
+## 9 · Casos de uso principales
+
+| Use‑case                                  | Entrada                          | Actores         | Descripción resumida                                                      |
+| ----------------------------------------- | -------------------------------- | --------------- | ------------------------------------------------------------------------- |
+| **ListUserChannelsQuery**                 | `userId,page,perPage`            | Usuario auth    | Devuelve resúmenes + contadores *unread* con paginación.                  |
+| **ListMessagesQuery**                     | `channelId,userId,limit,before?` | Participante    | Historial hacia atrás (lazy‑scroll).                                      |
+| **SendMessageUseCase**                    | `channelId,userId,charId?,dto`   | Participante    | Valida anti‑spam, adjuntos, crea mensaje y broadcast `message:new`.       |
+| **UploadAttachmentUseCase**               | `userId,file`                    | Usuario         | Sube binario, persiste `chat_attachments`, devuelve `fileId`.             |
+| **MarkReadUseCase**                       | `messageId,userId`               | Participante    | `INSERT` en `chat_message_reads` (ON CONFLICT DO NOTHING).                |
+| **UpdateMessageUseCase**                  | `messageId,userId,dto,isMod`     | Autor/Moderador | Edita dentro de ventana (120 s) o sin límite si moderador.                |
+| **DeleteMessageUseCase**                  | idem                             | Autor/Moderador | `is_deleted=true`, `content=''`, emite `message:deleted`.                 |
+| **JoinChannelUseCase**                    | `channelId,userId,charId`        | Usuario         | (Re)activa `chat_participants`, socket join; emite presencia ONLINE.      |
+| **LeaveChannelUseCase**                   | `channelId,userId`               | Usuario         | Marca `LEFT`, socket leave; emite presencia OFFLINE.                      |
+| **CountUnreadQuery / UnreadSummaryQuery** | `channelId,userId` / `userId`    | Cliente         | Devuelve contadores no leídos (canal o global).                           |
+| **CreateGuildSubChannelUseCase**          | `topic,autoSync,guildId,userId`  | Líder / Mod     | Crea sub‑canal; clona participantes si `autoSync`.                        |
+| **IsModeratorQuery**                      | `messageId,userId`               | Sistema         | Determina si el usuario puede moderar (role `moderator` o permiso guild). |
+| **PruneAttachmentsJob**                   | — (cron)                         | Sistema         | Elimina adjuntos huérfanos (>1 h) + borra archivo físico.                 |
+
+## 10 · Jerarquía de carpetas
+
+```
+chat
+│   chat.module.ts
+│
+├── application
+│   │   chat.service.ts
+│   │   presence.service.ts
+│   │
+│   ├── jobs
+│   │       prune-attachments.job.ts
+│   │
+│   ├── ports
+│   │       i-chat.repository.ts
+│   │
+│   ├── queries
+│   │       count-unread.query.ts
+│   │       is-moderator.query.ts
+│   │       list-messages.query.ts
+│   │       list-participants.query.ts
+│   │       list-user-channels.query.ts
+│   │       unread-summary.query.ts
+│   │
+│   ├── use-cases
+│   │       count-unread.use-case.ts
+│   │       create-guild-sub-channel.use-case.ts
+│   │       delete-message.use-case.ts
+│   │       join-channel.use-case.ts
+│   │       join-guild-channel.use-case.ts
+│   │       leave-channel.use-case.ts
+│   │       mark-read.use-case.ts
+│   │       open-direct-channel.use-case.ts
+│   │       send-media-message.use-case.ts
+│   │       send-message.use-case.ts
+│   │       update-message.use-case.ts
+│   │       upload-attachment.use-case.ts
+│   │
+│   └── ws
+│           chat.events.ts
+│
+├── domain
+│   ├── dto
+│   │       attachment.dto.ts
+│   │       channel-summary.dto.ts
+│   │       create-sub-channel.dto.ts
+│   │       mark-read.dto.ts
+│   │       pagination.dto.ts
+│   │       room.dto.ts
+│   │       send-media.dto.ts
+│   │       send-message.dto.ts
+│   │       unread-summary.dto.ts
+│   │       update-message.dto.ts
+│   │       upload-attachment.dto.ts
+│   │
+│   └── entities
+│           chat-attachment.entity.ts
+│           chat-channel.entity.ts
+│           chat-message-read.entity.ts
+│           chat-message.entity.ts
+│           chat-participant.entity.ts
+│
+└── infrastructure
+    ├── controllers
+    │       chat.controller.ts
+    │
+    ├── gateways
+    │       chat.gateway.ts
+    │
+    ├── guards
+    │       chat-participant.guard.ts
+    │       jwt-ws.guard.ts
+    │       ws-throttle.guard.ts
+    │
+    └── repositories
+            chat.repository.ts
+```
+
+---
+
+## 12 · Pruebas **REST**
+
+A continuación se documentan los ensayos mínimos recomendados para validar la primera versión del micro‑dominio Chat. Cada test contiene **petición**, **respuesta esperada** y **notas**.
+
+| #  | Endpoint                                        | Caso                                  | Request (cURL)                                                                 | Respuesta esperada (HTTP / JSON)                  | Notas                                     |
+| -- | ----------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------- | ----------------------------------------- |
+| 1  | **POST** `/chat/direct/{targetUserId}`          | Crear / recuperar canal 1‑a‑1 exitoso | `curl -X POST -H "Authorization: Bearer <JWT>" https://api/chat/direct/USER_B` | **201** `{ id, type:"direct", participants:[…] }` | Reenvía canal existente o crea nuevo.     |
+| 2  | **POST** `/chat/channels/{id}/messages`         | Enviar texto OK                       | Body `{ "content":"Hola", "type":"text" }`                                     | **201** `{ id, content:"Hola" }`                  | Trigger actualiza `lastMessageAt`.        |
+| 3  | idem                                            | Error: mensaje vacío                  | Body `{"content":""}`                                                          | **400** `"El mensaje está vacío"`                 | Sin texto ni adjuntos.                    |
+| 4  | **GET** `/chat/channels/{id}/messages?limit=30` | Historial lazy‑scroll                 | **200** `[ {id,sentAt,…}, … ]`                                                 | Orden ascendente (antiguo→nuevo).                 |                                           |
+| 5  | **PATCH** `/chat/messages/{id}`                 | Editar dentro de ventana              | Body `{"content":"edit"}`                                                      | **200** `{ editedAt!=null }`                      | <=120 s & autor.                          |
+| 6  | idem                                            | Editar fuera de ventana               | >120 s                                                                         | **403**                                           | Falla por tiempo.                         |
+| 7  | **DELETE** `/chat/messages/{id}`                | Borrar moderador                      | Header JWT con rol moderator                                                   | **200** `{id}`                                    | `is_deleted=true`.                        |
+| 8  | **POST** `/chat/attachments`                    | Subir archivo PNG                     | multipart `file=@img.png`                                                      | **201** `{ fileId, fileUrl }`                     | Máx 10 MB, PNG/JPEG/PDF.                  |
+| 9  | **GET** `/chat/channels/{id}/unread`            | Contador no leídos                    | **200** `{ unread: <int> }`                                                    | Tras `message:read` debe ser 0.                   |                                           |
+| 10 | **POST** `/guilds/{gid}/chat-channels`          | Crear sub‑canal OK                    | Body `{"topic":"Clan A","autoSync":true}`                                      | **201** `{ id, topic }`                           | Requiere permiso `CREATE_EVENTS` o líder. |
+
+---
+
+## 13 · Pruebas **WebSocket**
+
+Todos los ejemplos usan Socket.IO (JSON). El token JWT se pasa en `auth.token` durante la conexión.
+
+### 13.1 Conexión y presencia
+
+| Paso | Emisor → Servidor            | Respuesta / Broadcast                           | Comprobaciones                                    |
+| ---- | ---------------------------- | ----------------------------------------------- | ------------------------------------------------- |
+| 1    | `io("/chat",{auth:{token}})` | `connected`                                     | Socket autorizado.                                |
+| 2    | `channel:join` `{channelId}` | `channel:join:ack``presence:online` (broadcast) | El usuario se une a la sala & presencia global.   |
+| 3    | Desconectar socket           | `presence:offline` broadcast                    | Sólo cuando último socket del user se desconecta. |
+
+### 13.2 Mensajes
+
+| # | Evento cliente | Payload                                                      | Respuesta esperada                             | Notas                                           |
+| - | -------------- | ------------------------------------------------------------ | ---------------------------------------------- | ----------------------------------------------- |
+| 1 | `message:send` | `{channelId, type:"text", content:"Ping"}`                   | Broadcast `message:new` con objeto mensaje     | `senderCharacterId` propagado.                  |
+| 2 | idem (adjunto) | `{channelId,type:"media",content:"",attachments:[{fileId}]}` | `message:new` con `attachments`                | El adjunto debe existir & sin mensaje previo.   |
+| 3 | `message:read` | `{channelId,messageId}`                                      | `message:read:ack` + `channel:update` unread 0 | Otros participantes reciben `message:read:ack`. |
+
+### 13.3 Typing indicators
+
+| Evento         | Payload       | Broadcast                              |
+| -------------- | ------------- | -------------------------------------- |
+| `typing:start` | `{channelId}` | `typing:start` a sala (excluye emisor) |
+| `typing:stop`  | idem          | `typing:stop`                          |
+
+### 13.4 Moderación
+
+| Caso                  | Evento           | Resultado                                 |
+| --------------------- | ---------------- | ----------------------------------------- |
+| Autor edita ≤120 s    | `message:edit`   | Broadcast `message:edited` con `editedAt` |
+| Moderator borra       | `message:delete` | Broadcast `message:deleted`               |
+| Usuario no autorizado | idem             | `error` `code:403`                        |
+
+---
+
+## 11 · Backlog futuro
+
+* Búsqueda FTS (`/search`).
+* Archive/unarchive channel & clean inactive participants.
+* Redis storage para throttle + presence (multi‑node).
+* WS notifications when user is mentioned (`@username`).
+* UI: lazy‑load sub‑channels tree.
 
 

@@ -5,6 +5,7 @@ import {
   import { IsUrl, Length, IsMimeType, IsInt, Min } from 'class-validator';
   
   import { ChatMessage } from './chat-message.entity';
+import { Exclude } from 'class-transformer';
   
   @Entity('chat_attachments')
   @Index('ix_ca_message', ['message'])
@@ -16,7 +17,8 @@ import {
     /* ---- Relación con el mensaje ---- */
     @ManyToOne(() => ChatMessage, (m) => m.attachments, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'message_id' })
-    message!: ChatMessage;
+    @Exclude() 
+    message?: ChatMessage;
   
     /* ---- Datos de archivo ---- */
     @Column({ name: 'file_url', type: 'text' })

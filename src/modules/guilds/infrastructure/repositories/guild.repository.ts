@@ -570,4 +570,12 @@ export class GuildRepository implements IGuildRepository {
     return affected ?? 0;
   }
 
+  async listActiveMembershipIds(gid: string) {
+    return this.memberships.createQueryBuilder('m')
+      .select(['m.user_id  AS "userId"', 'm.active_character_id AS "charId"'])
+      .where('m.guild_id = :gid AND m.status = :st', { gid, st: 'active' })
+      .getRawMany();
+  }
+
+
 }

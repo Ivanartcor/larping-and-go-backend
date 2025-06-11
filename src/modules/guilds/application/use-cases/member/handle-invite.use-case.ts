@@ -1,20 +1,24 @@
 // src/modules/guilds/application/use-cases/member/handle-invite.use-case.ts
 import {
   Injectable, Inject, ForbiddenException, NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { IGuildRepository } from '../../ports/i-guild.repository';
-import { HandleInviteDto } from 'src/modules/guilds/domain/dto/invites/handle-invite.dto';  
+import { HandleInviteDto } from 'src/modules/guilds/domain/dto/invites/handle-invite.dto';
 import {
   InviteStatus, InviteType,
 } from '../../../domain/entities/guild-invite.entity';
 import { MembershipStatus } from '../../../domain/entities/guild-membership.entity';
-import { GuildPermission }  from '../../../domain/entities/guild-role.entity';
+import { GuildPermission } from '../../../domain/entities/guild-role.entity';
+import { joinGuildChat } from '../../helpers/join-guild-chat';
+import { IChatRepository } from 'src/modules/chat/application/ports/i-chat.repository';
 
 @Injectable()
 export class HandleInviteUseCase {
   constructor(
     @Inject('GUILD_REPO') private readonly guilds: IGuildRepository,
-  ) {}
+    @Inject('CHAT_REPO') private readonly chats: IChatRepository
+  ) { }
 
   async execute(
     guildId: string,
@@ -49,8 +53,8 @@ export class HandleInviteUseCase {
     }
 
     /* ─── Actualizar invitación ─── */
-    inv.status        = dto.status;
-    inv.handledAt     = new Date();
+    inv.status = dto.status;
+    inv.handledAt = new Date();
     inv.handledByUser = { id: modUserId } as any;
     await this.guilds.updateInvite(inv);
 
@@ -62,9 +66,9 @@ export class HandleInviteUseCase {
       let membership = await this.guilds.findMembershipAny(userId, guildId);
 
       if (membership) {
-        membership.status   = MembershipStatus.ACTIVE;
+        membership.status = MembershipStatus.ACTIVE;
         membership.joinedAt = new Date();
-        membership.leftAt   = undefined;
+        membership.leftAt = undefined;
         await this.guilds.updateMembership(membership);
       } else {
         // Rol más bajo (crea “Miembro” si sólo existe el líder)
@@ -72,7 +76,7 @@ export class HandleInviteUseCase {
         if (!role || role.isLeader) {
           role = await this.guilds.createRole({
             guild: inv.guild,
-            name : 'Miembro',
+            name: 'Miembro',
             color: '#6b7280',
             position: 1,
             permissions: 0,
@@ -80,14 +84,22 @@ export class HandleInviteUseCase {
           } as any);
         }
 
-        await this.guilds.createMembership({
+        membership = await this.guilds.createMembership({
           user: { id: userId } as any,
           guild: inv.guild,
-          role ,
-          status : MembershipStatus.ACTIVE,
+          role,
+          status: MembershipStatus.ACTIVE,
           joinedAt: new Date(),
         } as any);
       }
+
+      if (!membership.user.activeCharacter) {
+        throw new BadRequestException('El usuario no tiene un personaje activo');
+      }
+
+      //Lo metemos en el chat grupal de la hermandad
+      await joinGuildChat(guildId, userId, membership.user.activeCharacter.id, this.chats);
+
 
       /* Contador +1 */
       inv.guild.memberCount += 1;

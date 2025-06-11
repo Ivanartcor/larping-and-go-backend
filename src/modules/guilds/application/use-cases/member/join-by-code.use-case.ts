@@ -1,16 +1,20 @@
 // src/modules/guilds/application/use-cases/member/join-by-code.use-case.ts
 import {
     Injectable, Inject, NotFoundException, ConflictException, ForbiddenException,
+    BadRequestException,
 } from '@nestjs/common';
 import { IGuildRepository } from '../../ports/i-guild.repository';
 import { createHash } from 'crypto';
 import { MembershipStatus } from '../../../domain/entities/guild-membership.entity';
 import { GuildAccess } from '../../../domain/entities/guild.entity';
+import { joinGuildChat } from '../../helpers/join-guild-chat';
+import { IChatRepository } from 'src/modules/chat/application/ports/i-chat.repository';
 
 @Injectable()
 export class JoinByCodeUseCase {
     constructor(
         @Inject('GUILD_REPO') private readonly guilds: IGuildRepository,
+        @Inject('CHAT_REPO') private readonly chats: IChatRepository
     ) { }
 
     async execute(userId: string, guildId: string, plainToken: string) {
@@ -38,7 +42,7 @@ export class JoinByCodeUseCase {
         /* 4. Crear membresía activa con rol por defecto (posición más alta) */
         //si el rol es lider, creamos uno automáticamente
         let defaultRole = await this.guilds.findLowestRole(guildId);
-        
+
         if (!defaultRole || defaultRole.isLeader) {
             defaultRole = await this.guilds.createRole({
                 guild,
@@ -57,6 +61,14 @@ export class JoinByCodeUseCase {
             status: MembershipStatus.ACTIVE,
             joinedAt: new Date(),
         } as any);
+
+
+        if (!m.user.activeCharacter) {
+            throw new BadRequestException('El usuario no tiene un personaje activo');
+        }
+
+        //Lo metemos en el chat grupal de la hermandad
+        await joinGuildChat(guildId, userId, m.user.activeCharacter.id, this.chats);
 
         /* 5. Incrementar contador */
         guild.memberCount += 1;

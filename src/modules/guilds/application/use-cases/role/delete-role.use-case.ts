@@ -4,11 +4,14 @@ import {
 } from '@nestjs/common';
 import { IGuildRepository } from '../../ports/i-guild.repository'; 
 import { GuildPermission } from 'src/modules/guilds/domain/entities/guild-role.entity';  
+import { IStoragePort } from 'src/modules/users/application/ports/i-storage.port';
 
 @Injectable()
 export class DeleteRoleUseCase {
   constructor(
     @Inject('GUILD_REPO') private readonly guilds: IGuildRepository,
+    @Inject('STORAGE') private readonly storage: IStoragePort,
+    
   ) {}
 
   async execute(
@@ -38,6 +41,11 @@ export class DeleteRoleUseCase {
       throw new ConflictException('No se puede borrar un rol asignado a miembros');
     }
 
+    /* elimino icono si tenía */
+    const urlIcon = role.icon?.startsWith('/static/') ? role.icon : undefined;
+    if (urlIcon) await this.storage.remove(urlIcon);
+    
+    /* Borro finalmente rol */
     await this.guilds.deleteRole(roleId);
   }
 }

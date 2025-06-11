@@ -1,14 +1,18 @@
 import {
     Injectable, Inject, ForbiddenException, NotFoundException,
+    BadRequestException,
 } from '@nestjs/common';
 import { IGuildRepository } from '../../ports/i-guild.repository';
 import { InviteStatus, InviteType } from '../../../domain/entities/guild-invite.entity';
 import { GuildMembership, MembershipStatus } from '../../../domain/entities/guild-membership.entity';
+import { IChatRepository } from 'src/modules/chat/application/ports/i-chat.repository';
+import { joinGuildChat } from '../../helpers/join-guild-chat';
 
 @Injectable()
 export class RespondInviteUseCase {
     constructor(
         @Inject('GUILD_REPO') private readonly guilds: IGuildRepository,
+        @Inject('CHAT_REPO') private readonly chats: IChatRepository
     ) { }
 
     async execute(
@@ -32,6 +36,11 @@ export class RespondInviteUseCase {
         if (inv.status !== InviteStatus.PENDING) {
             throw new ForbiddenException('La invitación ya fue gestionada');
         }
+
+        if (!inv.targetUser.activeCharacter) {
+            throw new BadRequestException('El usuario no tiene un personaje activo');
+        }
+
 
         /* 2. Marcar estado */
         inv.status = accept ? InviteStatus.ACCEPTED : InviteStatus.REJECTED;
@@ -80,6 +89,13 @@ export class RespondInviteUseCase {
             } as GuildMembership);
             added = true;
         }
+
+        if (!membership.user.activeCharacter) {
+            throw new BadRequestException('El usuario no tiene un personaje activo');
+        }
+
+        //Lo metemos en el chat grupal de la hermandad
+        await joinGuildChat(guildId, userId, membership.user.activeCharacter.id, this.chats);
 
         /* 4. Actualizar contador si corresponde */
         if (added) {

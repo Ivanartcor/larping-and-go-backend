@@ -133,4 +133,8 @@ export interface IGuildRepository {
   /** Marca como expired todas las pending con expires_at < cutoff.  
  *  Devuelve cuántas filas actualizó. */
   expireInvites(cutoff: Date): Promise<number>;
+
+
+   listActiveMembershipIds(guildId: string):
+  Promise<Array<{ userId: string; charId: string | null }>>;
 }

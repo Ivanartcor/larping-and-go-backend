@@ -1,5 +1,5 @@
 // src/modules/guilds/guilds.module.ts
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Guild } from './domain/entities/guild.entity';
@@ -67,6 +67,7 @@ import { ListAttendancesQuery } from './application/queries/list-attendances.que
 import { GetEventDetailQuery } from './application/queries/get-event-detail.query';
 import { CompletePastEventsJob } from './application/jobs/complete-past-events.job';
 import { ExpireInvitesJob } from './application/jobs/expire-invites.job';
+import { ChatModule } from '../chat/chat.module';
 
 
 @Module({
@@ -77,6 +78,7 @@ import { ExpireInvitesJob } from './application/jobs/expire-invites.job';
       GuildInternalEvent, GuildEventAttendance,
     ]),
     UsersModule,
+    forwardRef(() => ChatModule),
     ScheduleModule.forRoot()
   ],
   controllers: [GuildsController],
