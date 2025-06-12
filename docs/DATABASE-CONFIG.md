@@ -8,16 +8,16 @@ Este documento explica, paso a paso, cómo conectar la aplicación **Larping &�
 
 ## 📑 Índice
 
-* [📦 Estructura del módulo de base de datos](#📦-estructura-del-módulo-de-base-de-datos)
-* [🌐 Variables de entorno y validación](#🌐-variables-de-entorno-y-validación)
-* [🧩 Configuración centralizada (`configuration.ts`)](#🧩-configuración-centralizada-configurationts)
-* [⚙️ Configuración del ORM (`data-source.ts`)](#⚙️-configuración-del-orm-data-sourcets)
+* [📦 Estructura del módulo de base de datos](#-estructura-del-módulo-de-base-de-datos)
+* [🌐 Variables de entorno y validación](#-variables-de-entorno-y-validación)
+* [🧩 Configuración centralizada (`configuration.ts`)](#-configuración-centralizada-configurationts)
+* [⚙️ Configuración del ORM (`data-source.ts`)](#-configuración-del-orm-data-sourcets)
 * [📦 Módulo de base de datos (`database.module.ts`)](#📦-módulo-de-base-de-datos-databasemodulets)
-* [🧪 Migraciones y Seeds](#🧪-migraciones-y-seeds)
-* [🗃️ Vista materializada `search_index`](#🗃️-vista-materializada-search_index)
-* [🔎 Verificación rápida](#🔎-verificación-rápida)
-* [🛠️ Solución de problemas frecuentes](#🛠️-solución-de-problemas-frecuentes)
-* [🔄 Ciclo de cambios futuros en el esquema](#🔄-ciclo-de-cambios-futuros-en-el-esquema)
+* [🧪 Migraciones y Seeds](#-migraciones-y-seeds)
+* [🗃️ Vista materializada `search_index`](#-vista-materializada-search_index)
+* [🔎 Verificación rápida](#-verificación-rápida)
+* [🛠️ Solución de problemas frecuentes](#-solución-de-problemas-frecuentes)
+* [🔄 Ciclo de cambios futuros en el esquema](#-ciclo-de-cambios-futuros-en-el-esquema)
 
 ---
 

@@ -8,20 +8,20 @@ Este módulo gestiona la autenticación y recuperación de contraseñas de los u
 
 ## 📑 Índice
 
-* [📦 Estructura del módulo](#estructura-del-módulo)
-* [📋 Entidades clave](#entidades-clave)
-* [📜 DTOs](#dtos)
-* [🔌 Ports (interfaces)](#ports-interfaces)
-* [🧩 Casos de uso](#casos-de-uso)
-* [🧱 Adaptadores](#adaptadores)
-* [🛡️ Seguridad (Guards y estrategias)](#seguridad-guards-y-estrategias)
-* [📬 Controladores REST](#controladores-rest)
-* [🧠 AuthService (façade)](#authservice-façade)
-* [🛠️ Módulo y configuración](#módulo-y-configuración)
-* [✅ Validación Joi](#validación-joi)
-* [🔁 Flujos detallados](#flujos-detallados)
-* [🧪 Pruebas de humo](#pruebas-de-humo)
-* [🚪 Logout y gestión de tokens](#logout-y-gestión-de-tokens)
+* [📦 Estructura del módulo](#-estructura-del-módulo)
+* [📋 Entidades clave](#-entidades-clave)
+* [📜 DTOs](#-dtos)
+* [🔌 Ports (interfaces)](#-ports-interfaces)
+* [🧩 Casos de uso](#-casos-de-uso)
+* [🧱 Adaptadores](#-adaptadores)
+* [🛡️ Seguridad (Guards y estrategias)](#-seguridad-guards-y-estrategias)
+* [📬 Controladores REST](#-controladores-rest)
+* [🧠 AuthService (façade)](#-authservice-façade)
+* [🛠️ Módulo y configuración](#-módulo-y-configuración)
+* [✅ Validación Joi](#-validación-joi)
+* [🔁 Flujos detallados](#-flujos-detallados)
+* [🧪 Pruebas de humo](#-pruebas-de-humo)
+* [🚪 Logout y gestión de tokens](#-logout-y-gestión-de-tokens)
 
 ---
 

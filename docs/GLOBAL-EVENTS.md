@@ -6,12 +6,12 @@ La sección de **Eventos Globales y Noticias** constituye un subsistema de comun
 
 ## 📑 Índice
 
-1. [Estado actual](#✨-estado-actual)
-2. [Objetivos del módulo](#⛏️-objetivos-del-módulo)
-3. [Entidades y Modelo Relacional](#♻️-entidades-y-modelo-relacional)
-4. [Relaciones entre entidades](#🔗-relaciones-entre-entidades)
-5. [Triggers y procesos automáticos](#⚙️-triggers-y-procesos-automáticos)
-6. [Flujos de negocio](#🤖-flujos-de-negocio)
+1. [Estado actual](#-estado-actual)
+2. [Objetivos del módulo](#-objetivos-del-módulo)
+3. [Entidades y Modelo Relacional](#-entidades-y-modelo-relacional)
+4. [Relaciones entre entidades](#-relaciones-entre-entidades)
+5. [Triggers y procesos automáticos](#-triggers-y-procesos-automáticos)
+6. [Flujos de negocio](#-flujos-de-negocio)
 
 ---
 

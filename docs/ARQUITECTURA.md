@@ -5,7 +5,7 @@ La arquitectura del backend de **Larping & Go** se basa en los principios de **D
 ---
 ## Índice
 
-* [🧩 Capas fundamentales](#capas-fundamentales)
+* [🧩 Capas fundamentales](#-capas-fundamentales)
 * [📁 Archivos raíz](#-archivos-raíz)
 * [🗂️ Carpetas de nivel superior](#-carpetas-de-nivel-superior)
 * [🧱 Estructura global del backend](#-estructura-global-del-backend)
@@ -16,7 +16,7 @@ La arquitectura del backend de **Larping & Go** se basa en los principios de **D
 * [🧬 Persistencia de datos](#-persistencia-de-datos)
 * [⚙️ Configuración y validación](#-configuración-y-validación)
 * [✅ Buenas prácticas aplicadas](#-buenas-prácticas-aplicadas)
-* [🔍 Arquitectura completa](#arquitectura-completa)
+* [🔍 Arquitectura completa](#-arquitectura-completa)
 
 
 

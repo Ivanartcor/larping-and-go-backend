@@ -8,13 +8,13 @@ Este documento describe la estructura lógica de la base de datos del proyecto *
 
 ## 📑 Índice
 
-* [📌 Introducción](#📌-introducción)
-* [📋 Principales entidades](#📋-principales-entidades)
-* [🔗 Relaciones y claves foráneas](#🔗-relaciones-y-claves-foráneas)
-* [📐 Convenciones de diseño](#📐-convenciones-de-diseño)
-* [🧠 Vistas y consultas complejas](#🧠-vistas-y-consultas-complejas)
-* [⚙️ Triggers y funciones SQL](#⚙️-triggers-y-funciones-sql)
-* [🧪 Validación y restricciones](#🧪-validación-y-restricciones)
+* [📌 Introducción](#-introducción)
+* [📋 Principales entidades](#-principales-entidades)
+* [🔗 Relaciones y claves foráneas](#-relaciones-y-claves-foráneas)
+* [📐 Convenciones de diseño](#-convenciones-de-diseño)
+* [🧠 Vistas y consultas complejas](#-vistas-y-consultas-complejas)
+* [⚙️ Triggers y funciones SQL](#-triggers-y-funciones-sql)
+* [🧪 Validación y restricciones](#-validación-y-restricciones)
 
 ---
 

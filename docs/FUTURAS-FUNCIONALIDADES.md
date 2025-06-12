@@ -7,10 +7,10 @@ Este documento recoge todas las funcionalidades planificadas, ideas en desarroll
 ## 📑 Índice
 
 
-1. [Estado general](#🔄-estado-general)
-2. [Funcionalidades futuras](#🔮-funcionalidades-futuras)
-3. [Aspectos técnicos y soporte](#🚧-aspectos-técnicos-y-soporte-aún-no-abordados)
-4. [Consideraciones finales](#📌-consideraciones-finales)
+1. [Estado general](#-estado-general)
+2. [Funcionalidades futuras](#-funcionalidades-futuras)
+3. [Aspectos técnicos y soporte](#-aspectos-técnicos-y-soporte-aún-no-abordados)
+4. [Consideraciones finales](#-consideraciones-finales)
 
 ---
 
