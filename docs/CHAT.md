@@ -539,3 +539,6 @@ Fase actual cerrada. El sistema cubre mensajería 1:1 y grupal (guild), y queda 
 
 
 
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

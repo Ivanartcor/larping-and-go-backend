@@ -221,3 +221,6 @@ GET /guilds/43e1/events/3c0b
 * 🔍 Añadir filtros avanzados por tipo o ubicación en el listado de eventos.
 
 
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

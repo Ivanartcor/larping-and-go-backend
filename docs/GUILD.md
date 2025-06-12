@@ -140,3 +140,7 @@ guilds/
 ---
 Para ver mas sobre el resto de funcionalidades dentro de una hermandad, vaya a la
   [**documentación dividida por secciones**](#🔗-documentación-dividida-por-secciones) del inicio 
+
+  ---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

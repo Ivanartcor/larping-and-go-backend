@@ -153,3 +153,8 @@ EXECUTE FUNCTION update_vote_count();
 ---
 
 Este diseño de base de datos está orientado a escalabilidad, mantenibilidad y refleja fielmente la estructura de dominio de la aplicación.
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

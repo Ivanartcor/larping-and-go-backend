@@ -216,3 +216,8 @@ prueba realizada para comprobar funcionamiento
 1. Crear encuesta con `closeAt = now() + 1min`.
 2. Forzar job o esperar ejecución.
 3. Comprobar resultado visible aun con `showResults = false`.
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

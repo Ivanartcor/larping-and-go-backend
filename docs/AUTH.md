@@ -287,3 +287,8 @@ curl -X POST http://localhost:3000/auth/password/request -d '{"email":"a@b.c"}'
 3. **Blacklist Redis:** se guarda jti de access token con TTL. Requiere Redis.
 
 **Recomendado:** combinar opciones 1 + 2 para seguridad + trazabilidad (en un futuro).
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

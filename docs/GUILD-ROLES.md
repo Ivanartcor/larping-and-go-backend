@@ -190,6 +190,11 @@ Evita conflicto con índice `ux_role_position`.
 
 ---
 
----
+
 
 ✅ Este sistema permite una **gestión descentralizada, flexible y jerárquica** de las hermandades, adaptándose al estilo de juego de cada comunidad.
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

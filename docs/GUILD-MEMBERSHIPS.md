@@ -226,3 +226,8 @@ CREATE INDEX ix_gi_expires ON guild_invites (expires_at) WHERE status = 'pending
 ✅ Este sistema garantiza un control seguro, auditado y flexible de la membresía en hermandades, con soporte para múltiples flujos de entrada y jerarquía de permisos.
 
 ---
+
+
+
+
+© 2025 – Larping & Go. Todos los derechos reservados.

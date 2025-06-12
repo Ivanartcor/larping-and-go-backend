@@ -172,3 +172,8 @@ Este documento recoge todas las funcionalidades planificadas, ideas en desarroll
 ## 📌 Consideraciones finales
 
 Este documento será actualizado conforme se avancen en fases de desarrollo, despliegue y evaluación de nuevas necesidades dentro de la comunidad. Muchas de estas funcionalidades dependen del feedback de los usuarios y la estabilidad de los módulos base ya implementados.
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

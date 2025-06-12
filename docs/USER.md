@@ -201,3 +201,8 @@ remove(url): Promise<void>
 ```
 
 Los métodos generan nombres seguros, garantizan la existencia de carpetas, y manejan errores del sistema de archivos de forma segura. `remove` ignora si el archivo no existe (`ENOENT`).
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

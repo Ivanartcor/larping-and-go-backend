@@ -612,3 +612,8 @@ C:.
 ---
 
 Esta arquitectura está pensada para escalar progresivamente, facilitar la colaboración entre equipos y permitir una futura migración hacia microservicios cuando sea necesario.
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

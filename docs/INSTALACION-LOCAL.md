@@ -123,3 +123,8 @@ mau deploy
 * 💬 Canal de Discord: [https://discord.gg/G7Qnnhy](https://discord.gg/G7Qnnhy)
 * 🎓 Cursos en vídeo: [https://courses.nestjs.com](https://courses.nestjs.com)
 * 🛠 Herramienta DevTools: [https://devtools.nestjs.com](https://devtools.nestjs.com)
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

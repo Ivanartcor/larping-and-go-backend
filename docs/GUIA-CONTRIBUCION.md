@@ -89,3 +89,8 @@ Gracias por tu interés en mejorar **Larping & Go**. Este proyecto está impulsa
 ---
 
 Para dudas, sugerencias o revisiones importantes, puedes contactar al mantenedor principal: **Iván Arteaga Cordero** - [ivanartcor@gmail.com](mailto:ivanartcor@gmail.com)
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

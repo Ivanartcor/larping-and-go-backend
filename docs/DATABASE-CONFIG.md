@@ -193,3 +193,8 @@ Este flujo garantiza trazabilidad, control de versiones y evita errores inespera
 ---
 
 Este enfoque garantiza una base de datos robusta, validada, fácilmente versionable y totalmente desacoplada de la lógica de negocio.
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

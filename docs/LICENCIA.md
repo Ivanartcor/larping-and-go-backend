@@ -59,4 +59,6 @@ Para cualquier cuestión legal, colaboración, solicitud de derechos o inquietud
 
 ---
 
-© Larping & Go – Todos los derechos reservados. Proyecto mantenido con fines educativos y comunitarios por Iván Arteaga Cordero.
+© 2025 - Larping & Go – Todos los derechos reservados. Proyecto mantenido con fines educativos y comunitarios por Iván Arteaga Cordero.
+
+

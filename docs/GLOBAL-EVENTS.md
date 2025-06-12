@@ -172,3 +172,8 @@ characters ─┘                         │
 ---
 
 Este módulo servirá de canal oficial entre la organización del mundo LARP y los jugadores, centralizando los mensajes importantes y facilitando la programación de eventos masivos. Su evolución futura podrá incluir encuestas, confirmación de asistencia, y comentarios moderados.
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.

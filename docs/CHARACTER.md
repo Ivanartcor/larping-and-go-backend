@@ -273,3 +273,9 @@ curl http://localhost:3000/characters/<ID>/properties -H "Authorization: Bearer 
 * Sanitización de avatar y nombre (sin scripts).
 * Slugs únicos, URL-safe y no editables luego de creados.
 * Todos los métodos usan DTOs con validación `class-validator`.
+
+
+
+---
+
+© 2025 – Larping & Go. Todos los derechos reservados.
