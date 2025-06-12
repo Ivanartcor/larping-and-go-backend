@@ -8,7 +8,7 @@ Este módulo gestiona la autenticación y recuperación de contraseñas de los u
 
 ## 📑 Índice
 
-* [📦 Estructura del módulo](#📦-estructura-del-módulo)
+* [📦 Estructura del módulo](#-estructura-del-módulo)
 * [📋 Entidades clave](#📋-entidades-clave)
 * [📜 DTOs](#📜-dtos)
 * [🔌 Ports (interfaces)](#🔌-ports-interfaces)
