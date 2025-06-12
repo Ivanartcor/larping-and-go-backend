@@ -39,7 +39,7 @@ Cada módulo sigue una separación clara entre tres capas:
 
 ---
 
-## 🗂️ Carpetas de nivel superior
+## 📁 Carpetas de nivel superior
 
 | Carpeta     | Contenido                                                        | Notas                                       |
 | ----------- | ---------------------------------------------------------------- | ------------------------------------------- |
