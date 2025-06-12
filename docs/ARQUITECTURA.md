@@ -5,18 +5,18 @@ La arquitectura del backend de **Larping & Go** se basa en los principios de **D
 ---
 ## Índice
 
-* [🧩 Capas fundamentales](#🧩-capas-fundamentales)
-* [📁 Archivos raíz](#📁-archivos-raíz)
-* [🗂️ Carpetas de nivel superior](#🗂️-carpetas-de-nivel-superior)
-* [🧱 Estructura global del backend](#🧱-estructura-global-del-backend)
-* [🧬 Estructura interna de un módulo típico](#🧬-estructura-interna-de-un-módulo-típico)
-* [📦 Ejemplo completo y comentado: módulo auth](#📦-ejemplo-completo-y-comentado-módulo-auth)
-* [🧩 Módulos principales y responsabilidades](#🧩-módulos-principales-y-responsabilidades)
-* [📡 Comunicación entre cliente y servidor](#📡-comunicación-entre-cliente-y-servidor)
-* [🧬 Persistencia de datos](#🧬-persistencia-de-datos)
-* [⚙️ Configuración y validación](#⚙️-configuración-y-validación)
-* [✅ Buenas prácticas aplicadas](#✅-buenas-prácticas-aplicadas)
-* [🔍 Arquitectura completa](#🔍arquitectura-completa)
+* [🧩 Capas fundamentales](#capas-fundamentales)
+* [📁 Archivos raíz](#-archivos-raíz)
+* [🗂️ Carpetas de nivel superior](#-carpetas-de-nivel-superior)
+* [🧱 Estructura global del backend](#-estructura-global-del-backend)
+* [🧬 Estructura interna de un módulo típico](#-estructura-interna-de-un-módulo-típico)
+* [📦 Ejemplo completo y comentado: módulo auth](#-ejemplo-completo-y-comentado-módulo-auth)
+* [🧩 Módulos principales y responsabilidades](#-módulos-principales-y-responsabilidades)
+* [📡 Comunicación entre cliente y servidor](#-comunicación-entre-cliente-y-servidor)
+* [🧬 Persistencia de datos](#-persistencia-de-datos)
+* [⚙️ Configuración y validación](#-configuración-y-validación)
+* [✅ Buenas prácticas aplicadas](#-buenas-prácticas-aplicadas)
+* [🔍 Arquitectura completa](#arquitectura-completa)
 
 
 
