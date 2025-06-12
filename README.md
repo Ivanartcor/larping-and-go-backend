@@ -10,7 +10,7 @@
 Este repositorio contiene toda la documentación oficial del Backend del proyecto **Larping & Go**, una plataforma colaborativa y social para comunidades de rol en vivo (LARP). Esta guía central proporciona acceso organizado a todos los documentos técnicos y funcionales.
  
 
-Mira ahora el [**Índice General de Documentación**](#📚-índice-general-de-documentación).
+Mira ahora el [**Índice General de Documentación**](#-índice-general-de-documentación).
 
 ---
 
